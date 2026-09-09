@@ -77,3 +77,4 @@ Mount the host's persistent volume at `/data`.
 New browsers see a 3-step privacy and usage guide before using the app. It explains the privacy check, how two-person rooms work, offline/saved messages, media features, and that the site works in modern browsers across computers, tablets/iPads, and phones. The guide is stored as completed in that browser so it does not appear on every visit.
 # Just-Two
 # Just-Two
+# Just-Two
