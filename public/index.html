@@ -10,6 +10,7 @@
 <body>
   <div id="appChrome" class="appChrome" aria-hidden="false">
     <div id="clock" class="clockPill">--:--</div>
+    <button id="privacyNowBtn" class="privacyNowBtn" type="button" aria-label="Blur screen now" title="Blur screen now">◉</button>
     <button id="globalEmergencyBtn" class="globalEmergency" type="button" aria-label="Emergency lock" title="Emergency lock">!</button>
   </div>
 
@@ -128,10 +129,19 @@
           <img id="themAvatarTop" class="avatar partnerAvatar" alt="">
           <div class="partnerText"><strong id="chatPartnerName">Friend</strong><div id="presence" class="presence">Connecting…</div></div>
         </div>
-        <div class="topActions"><span id="chatClock" class="chatClock">--:--</span><button id="emergencyBtn" class="iconBtn dangerBtn" aria-label="Emergency lock" title="Emergency lock">!</button><button id="profileBtn" class="iconBtn" aria-label="Profile and appearance">☺</button></div>
+        <div class="topActions"><span id="chatClock" class="chatClock">--:--</span><button id="chatPrivacyBtn" class="iconBtn" aria-label="Blur screen now" title="Blur screen now">◉</button><button id="emergencyBtn" class="iconBtn dangerBtn" aria-label="Emergency lock" title="Emergency lock">!</button><button id="profileBtn" class="iconBtn" aria-label="Profile and appearance">☺</button></div>
       </header>
 
       <div id="messages" class="messages" aria-live="polite"></div>
+
+      <div id="mediaTray" class="mediaTray hidden">
+        <div class="mediaTabs"><button id="gifTabBtn" class="selected" type="button">GIF</button><button id="stickerTabBtn" type="button">Stickers</button><button id="closeMediaTray" type="button">×</button></div>
+        <div id="gifPane" class="mediaPane">
+          <p>Paste a direct GIF link (Giphy/Tenor/media URL) and send it.</p>
+          <div class="gifSendRow"><input id="gifUrlInput" type="url" placeholder="https://...gif"><button id="sendGifBtn" type="button">Send GIF</button></div>
+        </div>
+        <div id="stickerPane" class="mediaPane hidden"><div id="stickerGrid" class="stickerGrid"></div><button id="uploadStickerBtn" class="secondary full" type="button">Upload your own sticker</button></div>
+      </div>
 
       <div id="emojiTray" class="emojiTray hidden">
         <div class="emojiHeader"><input id="emojiSearch" type="search" placeholder="Search emoji" aria-label="Search emoji"><button id="closeEmoji" type="button">×</button></div>
@@ -140,11 +150,13 @@
       </div>
       <form id="form" class="composer">
         <button type="button" id="emojiBtn" class="toolBtn" aria-label="Emoji">☺</button>
+        <button type="button" id="mediaBtn" class="toolBtn" aria-label="GIFs and stickers">GIF</button>
         <button type="button" id="imageBtn" class="toolBtn" aria-label="Add image">＋</button>
         <textarea id="input" maxlength="2000" rows="1" placeholder="Message" autocomplete="off"></textarea>
         <button type="button" id="voiceBtn" class="toolBtn voice" aria-label="Record voice note">🎙</button>
         <button class="send" aria-label="Send">➤</button>
         <input id="imageInput" type="file" accept="image/*" hidden />
+        <input id="stickerInput" type="file" accept="image/*,.gif" hidden />
       </form>
       <div id="recordingBar" class="recordingBar hidden"><span class="recordDot"></span><span id="recordTime">Recording 0:00</span><button id="cancelRecord" type="button">Cancel</button><button id="sendRecord" type="button">Send</button></div>
     </section>
@@ -181,5 +193,8 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="/app.js"></script>
+  <div id="privacyShield" class="privacyShield hidden" role="button" tabindex="0" aria-label="Privacy blur active. Double tap to reveal.">
+    <div class="privacyShieldCard"><span class="privacyEye">◉</span><strong>Privacy blur</strong><small>Double-tap anywhere to reveal</small></div>
+  </div>
 </body>
 </html>

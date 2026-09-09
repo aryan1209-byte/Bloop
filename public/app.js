@@ -2,7 +2,8 @@ const $ = id => document.getElementById(id);
 const views = ['landing','share','chat','error'];
 const show = id => { views.forEach(v => $(v).classList.toggle('hidden', v !== id)); $('appChrome')?.classList.toggle('hidden', id === 'chat'); };
 
-const onboardingVersion = 'justtwo:onboarding:v3';
+const onboardingVersion = 'justtwo:onboarding:v4';
+const returningAtBoot = localStorage.getItem(onboardingVersion)==='done';
 let onboardingStep = 0;
 function renderOnboarding(){
   const steps=[...document.querySelectorAll('.onboardingStep')];
@@ -35,7 +36,6 @@ const THEMES = [
   {id:'cursed',name:'JJK · Infinity',note:'Gojo / cursed violet'},
   {id:'wisteria',name:'KNY · Water Night',note:'Giyu / deep teal'},
   {id:'tokyo',name:'Tokyo Neon',note:'rain + neon signs'},
-  {id:'redmoon',name:'Red Moon',note:'black + crimson'},
   {id:'sakura',name:'Sakura After Dark',note:'muted pink night'},
   {id:'cyber',name:'Cyber Alley',note:'electric blue shadows'},
   {id:'aurora',name:'Aurora',note:'green-blue night'},
@@ -51,7 +51,7 @@ const BUBBLE_COLORS=[
   {id:'pink',value:'#d9578f',label:'Pink'}
 ];
 const customizationKey='justtwo:appearance:v2';
-let appearance={theme:'midnight',bubble:'red',privacy:true};
+let appearance={theme:'midnight',bubble:'red',privacy:false};
 try{ appearance={...appearance,...JSON.parse(localStorage.getItem(customizationKey)||'{}')}; }catch{}
 function applyAppearance(){
   document.documentElement.dataset.theme=appearance.theme;
@@ -60,7 +60,7 @@ function applyAppearance(){
   localStorage.setItem(customizationKey,JSON.stringify(appearance));
   document.querySelectorAll('[data-theme-choice]').forEach(el=>el.classList.toggle('selected',el.dataset.themeChoice===appearance.theme));
   document.querySelectorAll('[data-color-choice]').forEach(el=>el.classList.toggle('selected',el.dataset.colorChoice===appearance.bubble));
-  document.body.classList.toggle('privacyEnabled',Boolean(appearance.privacy));
+  document.body.classList.remove('privacyEnabled');
   ['privacyToggle','dialogPrivacyToggle','setupPrivacyToggle'].forEach(id=>{if($(id))$(id).checked=Boolean(appearance.privacy);});
 }
 function themeCard(theme){
@@ -79,7 +79,7 @@ function fillAppearanceControls(){
 }
 fillAppearanceControls();
 $('shuffleVibe').onclick=()=>{appearance.theme=THEMES[Math.floor(Math.random()*THEMES.length)].id;appearance.bubble=BUBBLE_COLORS[Math.floor(Math.random()*BUBBLE_COLORS.length)].id;applyAppearance();};
-['privacyToggle','dialogPrivacyToggle','setupPrivacyToggle'].forEach(id=>$(id)?.addEventListener('change',e=>{appearance.privacy=e.target.checked;applyAppearance();}));
+['privacyToggle','dialogPrivacyToggle','setupPrivacyToggle'].forEach(id=>$(id)?.addEventListener('change',e=>{appearance.privacy=e.target.checked;applyAppearance();if(e.target.checked)engagePrivacyShield();}));
 const funBits=[
   {type:'mood',text:'quietly chaotic'}, {type:'mood',text:'plot twist pending'}, {type:'mood',text:'certified yap session'},
   {type:'starter',text:'What is the most random thing you thought about today?'}, {type:'starter',text:'Pick one: teleportation or mind reading?'},
@@ -119,6 +119,20 @@ renderEmojiCategories();renderEmojiGrid();
 $('emojiSearch').addEventListener('input',renderEmojiGrid);
 $('emojiBtn').onclick=()=>{$('emojiTray').classList.toggle('hidden');if(!$('emojiTray').classList.contains('hidden'))$('emojiSearch').focus();};
 $('closeEmoji').onclick=()=>$('emojiTray').classList.add('hidden');
+
+const stickerChoices=['😈','💀','🤡','🫵','😭','😂','🙄','🤨','👀','🔥','💅','🗿','🤦','🤓','😤','🥱','😎','🫠','🤝','✨'];
+function renderStickers(){
+  if(!$('stickerGrid'))return;$('stickerGrid').innerHTML='';
+  stickerChoices.forEach(st=>{const b=document.createElement('button');b.type='button';b.className='stickerChoice';b.textContent=st;b.onclick=()=>{if(socket?.connected){socket.emit('message',`::sticker::${st}`);$('mediaTray').classList.add('hidden');}};$('stickerGrid').append(b);});
+}
+renderStickers();
+$('mediaBtn')?.addEventListener('click',()=>{$('mediaTray').classList.toggle('hidden');$('emojiTray').classList.add('hidden');});
+$('closeMediaTray')?.addEventListener('click',()=> $('mediaTray').classList.add('hidden'));
+$('gifTabBtn')?.addEventListener('click',()=>{$('gifTabBtn').classList.add('selected');$('stickerTabBtn').classList.remove('selected');$('gifPane').classList.remove('hidden');$('stickerPane').classList.add('hidden');});
+$('stickerTabBtn')?.addEventListener('click',()=>{$('stickerTabBtn').classList.add('selected');$('gifTabBtn').classList.remove('selected');$('stickerPane').classList.remove('hidden');$('gifPane').classList.add('hidden');});
+$('sendGifBtn')?.addEventListener('click',()=>{const url=$('gifUrlInput').value.trim();if(!url||!/^https?:\/\//i.test(url))return alert('Paste a valid GIF link first.');if(socket?.connected){socket.emit('message',url);$('gifUrlInput').value='';$('mediaTray').classList.add('hidden');}});
+$('uploadStickerBtn')?.addEventListener('click',()=> $('stickerInput').click());
+$('stickerInput')?.addEventListener('change',async()=>{const file=$('stickerInput').files[0];if(file)await uploadMedia('image',file);$('stickerInput').value='';$('mediaTray').classList.add('hidden');});
 
 function avatarFallback(role){
   const name=profiles[role]?.displayName||(role===myRole?'You':'Friend');
@@ -202,17 +216,25 @@ function setTyping(value){if(!socket?.connected)return;if(sentTyping!==value){se
 function clearEmpty(){if($('messages').querySelector('.empty'))$('messages').innerHTML='';}
 
 const reactionChoices=['❤️','😂','😭','🔥','👍','🥹','👀','💀'];
-function privacyReveal(el,temporary=false){
-  if(!appearance.privacy)return;
-  el.classList.add('privacyReveal');
-  if(temporary)setTimeout(()=>el.classList.remove('privacyReveal'),1800);
+function engagePrivacyShield(){
+  $('privacyShield')?.classList.remove('hidden');
+  document.body.classList.add('privacyLocked');
 }
-function attachPrivacyReveal(bubble){
-  bubble.addEventListener('pointerdown',()=>privacyReveal(bubble));
-  ['pointerup','pointercancel'].forEach(name=>bubble.addEventListener(name,()=>bubble.classList.remove('privacyReveal')));
-  bubble.addEventListener('click',e=>{if(e.pointerType==='mouse')return;privacyReveal(bubble,true);});
+function releasePrivacyShield(){
+  $('privacyShield')?.classList.add('hidden');
+  document.body.classList.remove('privacyLocked');
 }
-$('chat')?.addEventListener('mouseleave',()=>document.querySelectorAll('.msg.privacyReveal').forEach(el=>el.classList.remove('privacyReveal')));
+let lastShieldTap=0;
+function shieldTap(){
+  const now=Date.now();
+  if(now-lastShieldTap<420){releasePrivacyShield();lastShieldTap=0;}else lastShieldTap=now;
+}
+$('privacyShield')?.addEventListener('dblclick',releasePrivacyShield);
+$('privacyShield')?.addEventListener('pointerup',e=>{if(e.pointerType!=='mouse')shieldTap();});
+$('privacyShield')?.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();shieldTap();}});
+$('privacyNowBtn')?.addEventListener('click',engagePrivacyShield);
+$('chatPrivacyBtn')?.addEventListener('click',engagePrivacyShield);
+
 function addMessage(msg){
   const row=document.createElement('div');row.className=`messageRow ${msg.sender===myRole?'mine':'theirs'}`;row.dataset.id=msg.id;row.dataset.sender=msg.sender;
   const avatar=document.createElement('img');avatar.className='avatar messageAvatar';avatar.alt='';setAvatar(avatar,msg.sender);
@@ -220,12 +242,11 @@ function addMessage(msg){
   if(msg.deletedAt){bubble.classList.add('deleted');bubble.textContent='Message deleted';}
   else if(msg.type==='image'){const img=document.createElement('img');img.className='messageImage';img.src=msg.mediaUrl;img.alt='Shared image';img.loading='lazy';bubble.append(img);}
   else if(msg.type==='audio'){const audio=document.createElement('audio');audio.controls=true;audio.preload='metadata';audio.src=msg.mediaUrl;bubble.append(audio);}
-  else {const text=document.createElement('span');text.textContent=msg.body;bubble.append(text);appendLinkPreview(bubble,msg.body);}
+  else {if((msg.body||'').startsWith('::sticker::')){bubble.classList.add('stickerMessage');bubble.textContent=msg.body.slice(11);}else{const text=document.createElement('span');text.textContent=msg.body;bubble.append(text);appendLinkPreview(bubble,msg.body);}}
   const meta=document.createElement('div');meta.className='meta';meta.textContent=new Date(msg.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   const actions=document.createElement('div');actions.className='msgActions';
   if(!msg.deletedAt){const react=document.createElement('button');react.type='button';react.title='React';react.textContent='♡';react.onclick=e=>openReactionMenu(e.currentTarget,msg.id);actions.append(react);if(msg.sender===myRole){const del=document.createElement('button');del.type='button';del.title='Delete';del.textContent='⌫';del.onclick=()=>{if(confirm('Delete this message?'))socket?.emit('delete-message',msg.id);};actions.append(del);}}
   const reactionBar=document.createElement('div');reactionBar.className='reactions';wrap.append(actions,bubble,reactionBar,meta);row.append(avatar,wrap);$('messages').append(row);updateReactions(msg.id,msg.reactions||[]);
-  if(!msg.deletedAt)attachPrivacyReveal(bubble);
   if(msg.sender!==myRole&&!msg.deletedAt)attachLongPress(bubble,msg.id);
 }
 function attachLongPress(target,messageId){
@@ -251,9 +272,15 @@ function appendLinkPreview(bubble,body=''){
   if(host==='youtu.be'||host.endsWith('youtube.com')){
     let id=host==='youtu.be'?u.pathname.slice(1):u.searchParams.get('v');
     if(!id&&u.pathname.startsWith('/shorts/'))id=u.pathname.split('/')[2];
-    if(id){const card=document.createElement('a');card.className='linkCard youtubeCard';card.href=u.href;card.target='_blank';card.rel='noopener';card.innerHTML=`<span class="linkBadge">▶ YOUTUBE</span><strong>Open video</strong><small>Tap to watch on YouTube</small>`;bubble.append(card);}
+    if(id){
+      const wrap=document.createElement('div');wrap.className='youtubeEmbed';
+      wrap.innerHTML=`<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}" title="YouTube video" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe><a href="${u.href}" target="_blank" rel="noopener">▶ Open on YouTube</a>`;
+      bubble.append(wrap);
+    }
   } else if(host.endsWith('pinterest.com')||host==='pin.it'){
-    const card=document.createElement('a');card.className='linkCard pinterestCard';card.href=u.href;card.target='_blank';card.rel='noopener';card.innerHTML='<span class="linkBadge">P PINTEREST</span><strong>Open Pin</strong><small>Tap to view it on Pinterest</small>';bubble.append(card);
+    const card=document.createElement('a');card.className='linkCard pinterestCard';card.href=u.href;card.target='_blank';card.rel='noopener';card.innerHTML='<span class="linkBadge">P PINTEREST</span><strong>Pinterest Pin</strong><small>Open the Pin in Pinterest</small>';bubble.append(card);
+  } else if(/\.gif($|\?)/i.test(u.pathname+u.search)||host.includes('giphy.com')||host.includes('tenor.com')){
+    const gif=document.createElement('img');gif.className='gifMessage';gif.src=u.href;gif.alt='GIF';gif.loading='lazy';bubble.append(gif);
   }
 }
 
@@ -299,5 +326,6 @@ async function boot(){
   const pathMatch=location.pathname.match(/^\/chat\/([^/]+)$/);
   if(pathMatch){currentRoom=decodeURIComponent(pathMatch[1]);authToken=localStorage.getItem(storageKey(currentRoom));myRole=localStorage.getItem(roleKey(currentRoom));if(authToken)await openChat(false);else await goHome(true);}else{history.replaceState({view:'home'},'',location.href);await goHome(false);}
   maybeShowOnboarding();
+  if(returningAtBoot) setTimeout(engagePrivacyShield,80);
 }
 boot();

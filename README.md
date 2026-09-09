@@ -75,3 +75,11 @@ Mount the host's persistent volume at `/data`.
 ## First-visit onboarding
 
 New browsers see a 3-step privacy and usage guide before using the app. It explains the privacy check, how two-person rooms work, offline/saved messages, media features, and that the site works in modern browsers across computers, tablets/iPads, and phones. The guide is stored as completed in that browser so it does not appear on every visit.
+
+### v5 UI notes
+- Removed Red Moon and the dotted/repeating text wallpapers.
+- Added an instant whole-screen privacy shield; double-click or double-tap the blurred shield to reveal.
+- Returning visits start behind the privacy shield.
+- JJK Infinity and KNY Water Night now use original CSS/SVG character-inspired illustrations rather than copied show artwork.
+- YouTube links render inline players; Pinterest links render dedicated cards.
+- Added GIF-by-link sending and a sticker tray, plus custom sticker image upload.
