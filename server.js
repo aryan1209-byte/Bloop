@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS messages (
   media_url TEXT,
   created_at INTEGER NOT NULL,
   deleted_at INTEGER,
+  seen_at INTEGER,
   FOREIGN KEY(room_id) REFERENCES rooms(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS reactions (
@@ -60,6 +61,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   display_name TEXT NOT NULL DEFAULT '',
   avatar_url TEXT,
   last_seen INTEGER,
+  username TEXT,
   PRIMARY KEY(room_id, role),
   FOREIGN KEY(room_id) REFERENCES rooms(id) ON DELETE CASCADE
 );
@@ -75,12 +77,14 @@ const messageColumns = db.prepare('PRAGMA table_info(messages)').all().map(c => 
 for (const [name, sql] of [
   ['type', `ALTER TABLE messages ADD COLUMN type TEXT NOT NULL DEFAULT 'text'`],
   ['media_url', `ALTER TABLE messages ADD COLUMN media_url TEXT`],
-  ['deleted_at', `ALTER TABLE messages ADD COLUMN deleted_at INTEGER`]
+  ['deleted_at', `ALTER TABLE messages ADD COLUMN deleted_at INTEGER`],
+  ['seen_at', `ALTER TABLE messages ADD COLUMN seen_at INTEGER`]
 ]) if (!messageColumns.includes(name)) db.exec(sql);
 
 
 const profileColumns = db.prepare('PRAGMA table_info(profiles)').all().map(c => c.name);
 if (!profileColumns.includes('last_seen')) db.exec(`ALTER TABLE profiles ADD COLUMN last_seen INTEGER`);
+if (!profileColumns.includes('username')) db.exec(`ALTER TABLE profiles ADD COLUMN username TEXT`);
 
 
 const EMERGENCY_PASSWORD = process.env.EMERGENCY_PASSWORD || 'aryan';
@@ -114,6 +118,7 @@ setInterval(makeBackup, 30 * 60 * 1000).unref();
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 const token = (bytes = 24) => crypto.randomBytes(bytes).toString('base64url');
 const cleanName = value => String(value || '').trim().slice(0, 24);
+const cleanUsername = value => String(value || '').trim().replace(/^@+/,'').replace(/[^a-zA-Z0-9_.]/g,'').slice(0,20);
 
 function authenticate(roomId, authToken) {
   if (!roomId || !authToken) return null;
@@ -130,18 +135,18 @@ function authRequest(req) {
 }
 
 function getProfiles(roomId) {
-  const rows = db.prepare('SELECT role, display_name AS displayName, avatar_url AS avatarUrl FROM profiles WHERE room_id = ?').all(roomId);
+  const rows = db.prepare('SELECT role, display_name AS displayName, avatar_url AS avatarUrl, username FROM profiles WHERE room_id = ?').all(roomId);
   const out = {
-    creator: { displayName: 'You', avatarUrl: null },
-    guest: { displayName: 'Friend', avatarUrl: null }
+    creator: { displayName: 'You', avatarUrl: null, username: '' },
+    guest: { displayName: 'Friend', avatarUrl: null, username: '' }
   };
-  for (const p of rows) out[p.role] = { displayName: p.displayName || (p.role === 'creator' ? 'You' : 'Friend'), avatarUrl: p.avatarUrl || null };
+  for (const p of rows) out[p.role] = { displayName: p.displayName || (p.role === 'creator' ? 'You' : 'Friend'), avatarUrl: p.avatarUrl || null, username: p.username || '' };
   return out;
 }
 
 function serializeMessages(roomId) {
   const rows = db.prepare(`
-    SELECT id, sender, body, type, media_url AS mediaUrl, created_at AS createdAt, deleted_at AS deletedAt
+    SELECT id, sender, body, type, media_url AS mediaUrl, created_at AS createdAt, deleted_at AS deletedAt, seen_at AS seenAt
     FROM messages WHERE room_id = ? ORDER BY id ASC LIMIT 1000
   `).all(roomId);
   const reactions = db.prepare(`
@@ -252,9 +257,13 @@ app.patch('/api/rooms/:roomId/profile', (req, res) => {
   const auth = authRequest(req);
   if (!auth) return res.status(401).json({ error: 'Not authorized.' });
   const displayName = cleanName(req.body?.displayName);
-  db.prepare(`INSERT INTO profiles (room_id, role, display_name) VALUES (?, ?, ?)
-    ON CONFLICT(room_id, role) DO UPDATE SET display_name = excluded.display_name`)
-    .run(req.params.roomId, auth.role, displayName || (auth.role === 'creator' ? 'You' : 'Friend'));
+  const username = cleanUsername(req.body?.username);
+  const existing = getProfiles(req.params.roomId)[auth.role];
+  const nextName = displayName || existing.displayName || (auth.role === 'creator' ? 'You' : 'Friend');
+  const nextUsername = username || existing.username || '';
+  db.prepare(`INSERT INTO profiles (room_id, role, display_name, username) VALUES (?, ?, ?, ?)
+    ON CONFLICT(room_id, role) DO UPDATE SET display_name = excluded.display_name, username = excluded.username`)
+    .run(req.params.roomId, auth.role, nextName, nextUsername);
   const profile = getProfiles(req.params.roomId)[auth.role];
   io.to(req.params.roomId).emit('profile', { role: auth.role, ...profile });
   res.json(profile);
@@ -276,9 +285,10 @@ app.post('/api/rooms/:roomId/upload/:kind', express.raw({ type: '*/*', limit: '8
 
   if (kind === 'avatar') {
     const previous = getProfiles(req.params.roomId)[auth.role].avatarUrl;
-    db.prepare(`INSERT INTO profiles (room_id, role, display_name, avatar_url) VALUES (?, ?, ?, ?)
+    const existingProfile = getProfiles(req.params.roomId)[auth.role];
+    db.prepare(`INSERT INTO profiles (room_id, role, display_name, avatar_url, username) VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(room_id, role) DO UPDATE SET avatar_url = excluded.avatar_url`)
-      .run(req.params.roomId, auth.role, auth.role === 'creator' ? 'You' : 'Friend', url);
+      .run(req.params.roomId, auth.role, existingProfile.displayName || (auth.role === 'creator' ? 'You' : 'Friend'), url, existingProfile.username || '');
     if (previous && previous !== url) deleteLocalMedia(previous);
     const profile = getProfiles(req.params.roomId)[auth.role];
     io.to(req.params.roomId).emit('profile', { role: auth.role, ...profile });
@@ -289,7 +299,7 @@ app.post('/api/rooms/:roomId/upload/:kind', express.raw({ type: '*/*', limit: '8
   const type = kind === 'audio' ? 'audio' : 'image';
   const info = db.prepare('INSERT INTO messages (room_id, sender, body, type, media_url, created_at) VALUES (?, ?, ?, ?, ?, ?)')
     .run(req.params.roomId, auth.role, '', type, url, createdAt);
-  const msg = { id: Number(info.lastInsertRowid), sender: auth.role, body: '', type, mediaUrl: url, createdAt, deletedAt: null, reactions: [] };
+  const msg = { id: Number(info.lastInsertRowid), sender: auth.role, body: '', type, mediaUrl: url, createdAt, deletedAt: null, seenAt: null, reactions: [] };
   io.to(req.params.roomId).emit('message', msg);
   res.json(msg);
 });
@@ -322,7 +332,7 @@ io.on('connection', socket => {
     const info = db.prepare(`INSERT INTO messages (room_id, sender, body, type, created_at) VALUES (?, ?, ?, 'text', ?)`)
       .run(roomId, role, body, createdAt);
     socket.to(roomId).emit('typing', { role, typing: false });
-    io.to(roomId).emit('message', { id: Number(info.lastInsertRowid), sender: role, body, type: 'text', mediaUrl: null, createdAt, deletedAt: null, reactions: [] });
+    io.to(roomId).emit('message', { id: Number(info.lastInsertRowid), sender: role, body, type: 'text', mediaUrl: null, createdAt, deletedAt: null, seenAt: null, reactions: [] });
   });
 
   socket.on('react', ({ messageId, emoji } = {}) => {
@@ -336,7 +346,15 @@ io.on('connection', socket => {
     else db.prepare(`INSERT INTO reactions(message_id, role, emoji) VALUES (?, ?, ?)
       ON CONFLICT(message_id, role) DO UPDATE SET emoji = excluded.emoji`).run(id, role, safeEmoji);
     const reactions = db.prepare('SELECT role, emoji FROM reactions WHERE message_id = ?').all(id);
-    io.to(roomId).emit('reaction', { messageId: id, reactions });
+    io.to(roomId).emit('reaction', { messageId: id, reactions, emoji: safeEmoji, role });
+  });
+
+  socket.on('seen', () => {
+    const now = Date.now();
+    const rows = db.prepare('SELECT id FROM messages WHERE room_id = ? AND sender != ? AND seen_at IS NULL AND deleted_at IS NULL').all(roomId, role);
+    if (!rows.length) return;
+    db.prepare('UPDATE messages SET seen_at = ? WHERE room_id = ? AND sender != ? AND seen_at IS NULL').run(now, roomId, role);
+    io.to(roomId).emit('seen', { messageIds: rows.map(r => r.id), seenAt: now, viewerRole: role });
   });
 
   socket.on('delete-message', messageId => {

@@ -15,46 +15,12 @@
   </div>
 
   <section id="onboarding" class="onboarding hidden" aria-live="polite" aria-modal="true" role="dialog">
-    <div class="onboardingPanel">
-      <div class="manualTop"><span class="manualEyebrow">JUST TWO / START HERE</span><span id="manualStepLabel">1 of 4</span></div>
+    <div class="onboardingPanel compactManual">
+      <div class="manualTop"><button id="manualStartOver" class="manualBack hidden" type="button">↶ First step</button><span class="manualEyebrow">JUST TWO / START HERE</span><span id="manualStepLabel">1 of 3</span></div>
       <div class="onboardingProgress"><span id="onboardingProgress"></span></div>
-
-      <div class="onboardingStep" data-step="0">
-        <div class="onboardingIcon">✦</div>
-        <h2>Welcome to Just Two.</h2>
-        <p>A small private space for the conversation you actually came here for.</p>
-        <div class="manualCard"><strong>Before you open anything</strong><span>If you want the conversation private, check your surroundings first and make sure your screen is not visible to people nearby.</span></div>
-        <button class="primary full onboardingNext" type="button">I’m ready</button>
-      </div>
-
-      <div class="onboardingStep hidden" data-step="1">
-        <div class="onboardingIcon">↗</div>
-        <h2>Invites are simple.</h2>
-        <p>If you make a chat, you get one private invite link. The person opening it sees an invite first and chooses whether to join.</p>
-        <div class="manualCard"><strong>Heads-up</strong><span>The first new browser that accepts an unused invite takes the second spot, so only send the link to the person you mean to invite.</span></div>
-        <button class="primary full onboardingNext" type="button">Next</button>
-      </div>
-
-      <div class="onboardingStep hidden" data-step="2">
-        <div class="onboardingIcon">💬</div>
-        <h2>Your chat remembers.</h2>
-        <p>Messages stay saved on the server. You can send while the other person is away, then they can catch up later.</p>
-        <div class="instructionList">
-          <div><b>01</b><span>Text, photos and voice notes</span></div>
-          <div><b>02</b><span>Typing + online / last seen</span></div>
-          <div><b>03</b><span>Hold a message to react</span></div>
-          <div><b>04</b><span>Names, profile photos and themes</span></div>
-        </div>
-        <button class="primary full onboardingNext" type="button">One more</button>
-      </div>
-
-      <div class="onboardingStep hidden" data-step="3">
-        <div class="onboardingIcon">⌂</div>
-        <h2>Home is your base.</h2>
-        <p>When you come back later, you land on Home first. From there you can reopen your chat, change the look, or make a new one.</p>
-        <div class="manualCard"><strong>Back means Home</strong><span>Inside a chat, the back button returns here instead of kicking you out of the site.</span></div>
-        <button id="finishOnboarding" class="primary full" type="button">Got it — open Home</button>
-      </div>
+      <div class="onboardingStep" data-step="0"><div class="onboardingIcon">✦</div><h2>Welcome to Just Two.</h2><p>Before opening a chat, check that nobody nearby can read your screen.</p><button class="primary full onboardingNext" type="button">I’m ready</button></div>
+      <div class="onboardingStep hidden" data-step="1"><div class="onboardingIcon">↗</div><h2>Invite one person.</h2><p>Create a chat, send the invite, and they choose whether to accept.</p><div class="manualNav"><button class="secondary onboardingBack" type="button">← Back</button><button class="primary onboardingNext" type="button">Next</button></div></div>
+      <div class="onboardingStep hidden" data-step="2"><div class="onboardingIcon">💬</div><h2>That’s basically it.</h2><p>Messages save, Back returns Home, and the ◉ button instantly blurs the screen.</p><div class="manualNav"><button class="secondary onboardingBack" type="button">← Back</button><button id="finishOnboarding" class="primary" type="button">Open Home</button></div></div>
     </div>
   </section>
 
@@ -88,11 +54,10 @@
         <div class="inviteActions"><button id="declineInviteBtn" class="secondary" type="button">Not now</button><button id="acceptInviteBtn" class="primary" type="button">Accept & join</button></div>
       </div>
 
-      <div id="continueCard" class="continueCard hidden">
-        <img id="continueAvatar" class="avatar continueAvatar" alt="">
-        <div class="continueText"><span>Your chat</span><strong id="continueName">Friend</strong><small id="continueSub">Ready when you are.</small></div>
-        <button id="continueBtn" class="continueBtn" type="button">Open chat →</button>
-      </div>
+      <section id="contactsWidget" class="homeWidget contactsWidget hidden">
+        <div class="widgetHeading"><div><span class="eyebrow">YOUR CHATS</span><h2>People</h2></div><small id="contactsCount" class="muted"></small></div>
+        <div id="contactsList" class="contactsList"></div>
+      </section>
 
       <section class="homeWidget">
         <div class="widgetHeading"><div><span class="eyebrow">MAKE IT YOURS</span><h2>Pick a vibe</h2></div><button id="shuffleVibe" class="tinyBtn" type="button">Surprise me</button></div>
@@ -100,14 +65,13 @@
         <div class="colorRow"><span>My message colour</span><div id="colorChoices" class="colorChoices"></div></div>
       </section>
 
-      <section class="homeWidget funZone">
-        <div class="funCopy"><span class="eyebrow">CHAOS WHEEL</span><h2>Spin something into the chat.</h2><span id="funType" class="funType">MOOD</span><div id="funResult" class="funResult">quietly chaotic</div></div>
-        <button id="funBtn" class="funWheel" type="button" aria-label="Spin the chaos wheel"><span>SPIN</span></button>
+      <section class="homeWidget funZone simpleFun">
+        <div class="funCopy"><span class="eyebrow">RANDOM CHAOS</span><h2 id="funType">MOOD</h2><div id="funResult" class="funResult">quietly chaotic</div></div>
+        <button id="funBtn" class="tinyBtn" type="button">Give me another</button>
       </section>
 
       <section class="homeWidget privacyWidget">
-        <div><span class="eyebrow">SIDE PRIVACY</span><h2>Blur messages unless you reveal them.</h2><p class="muted">Hold or tap a message to reveal it. Moving your pointer out of the chat blurs everything again.</p></div>
-        <label class="switchRow"><span>Privacy blur</span><input id="privacyToggle" type="checkbox"><i></i></label>
+        <div><span class="eyebrow">PRIVACY</span><h2>Need the screen hidden fast?</h2><p class="muted">Tap ◉ at the top. Everything blurs instantly. Double-tap the blur to come back.</p></div>
       </section>
 
       <div class="landingActions"><button id="createBtn" class="primary">Make a new chat</button></div>
@@ -127,37 +91,25 @@
         <button id="chatBackBtn" class="iconBtn backIcon" type="button" aria-label="Back to Home">←</button>
         <div class="chatIdentity">
           <img id="themAvatarTop" class="avatar partnerAvatar" alt="">
-          <div class="partnerText"><strong id="chatPartnerName">Friend</strong><div id="presence" class="presence">Connecting…</div></div>
+          <div class="partnerText"><strong id="chatPartnerName">Friend</strong><div class="presenceLine"><span id="presenceDot" class="presenceDot offline"></span><div id="presence" class="presence">Connecting…</div></div></div>
         </div>
         <div class="topActions"><span id="chatClock" class="chatClock">--:--</span><button id="chatPrivacyBtn" class="iconBtn" aria-label="Blur screen now" title="Blur screen now">◉</button><button id="emergencyBtn" class="iconBtn dangerBtn" aria-label="Emergency lock" title="Emergency lock">!</button><button id="profileBtn" class="iconBtn" aria-label="Profile and appearance">☺</button></div>
       </header>
 
       <div id="messages" class="messages" aria-live="polite"></div>
+      <div id="typingBubble" class="typingBubble hidden" aria-label="Friend is typing"><span></span><span></span><span></span></div>
 
-      <div id="mediaTray" class="mediaTray hidden">
-        <div class="mediaTabs"><button id="gifTabBtn" class="selected" type="button">GIF</button><button id="stickerTabBtn" type="button">Stickers</button><button id="closeMediaTray" type="button">×</button></div>
-        <div id="gifPane" class="mediaPane">
-          <p>Paste a direct GIF link (Giphy/Tenor/media URL) and send it.</p>
-          <div class="gifSendRow"><input id="gifUrlInput" type="url" placeholder="https://...gif"><button id="sendGifBtn" type="button">Send GIF</button></div>
-        </div>
-        <div id="stickerPane" class="mediaPane hidden"><div id="stickerGrid" class="stickerGrid"></div><button id="uploadStickerBtn" class="secondary full" type="button">Upload your own sticker</button></div>
-      </div>
-
-      <div id="emojiTray" class="emojiTray hidden">
-        <div class="emojiHeader"><input id="emojiSearch" type="search" placeholder="Search emoji" aria-label="Search emoji"><button id="closeEmoji" type="button">×</button></div>
-        <div id="emojiCategories" class="emojiCategories"></div>
-        <div id="emojiGrid" class="emojiGrid"></div>
-      </div>
       <form id="form" class="composer">
         <button type="button" id="emojiBtn" class="toolBtn" aria-label="Emoji">☺</button>
-        <button type="button" id="mediaBtn" class="toolBtn" aria-label="GIFs and stickers">GIF</button>
         <button type="button" id="imageBtn" class="toolBtn" aria-label="Add image">＋</button>
+        <button type="button" id="linkBtn" class="toolBtn" aria-label="Send YouTube or Pinterest link" title="YouTube / Pinterest">↗</button>
         <textarea id="input" maxlength="2000" rows="1" placeholder="Message" autocomplete="off"></textarea>
         <button type="button" id="voiceBtn" class="toolBtn voice" aria-label="Record voice note">🎙</button>
         <button class="send" aria-label="Send">➤</button>
         <input id="imageInput" type="file" accept="image/*" hidden />
-        <input id="stickerInput" type="file" accept="image/*,.gif" hidden />
       </form>
+      <div id="linkTray" class="linkTray hidden"><input id="linkInput" type="url" placeholder="Paste a YouTube or Pinterest link"><button id="sendLinkBtn" type="button">Send</button><button id="closeLinkTray" type="button">×</button></div>
+      <div id="emojiTray" class="emojiTray hidden"><div class="emojiHeader"><input id="emojiSearch" placeholder="Emoji"><button id="closeEmoji" type="button">×</button></div><div id="emojiCategories" class="emojiCategories"></div><div id="emojiGrid" class="emojiGrid"></div></div>
       <div id="recordingBar" class="recordingBar hidden"><span class="recordDot"></span><span id="recordTime">Recording 0:00</span><button id="cancelRecord" type="button">Cancel</button><button id="sendRecord" type="button">Send</button></div>
     </section>
 
@@ -167,34 +119,43 @@
   <dialog id="profileDialog" class="profileDialog">
     <form method="dialog" class="dialogCard">
       <button class="closeBtn" value="cancel" aria-label="Close">×</button>
-      <span class="eyebrow">PROFILE + LOOK</span><h2>Your side of the chat</h2>
+      <span class="eyebrow">CUSTOMIZE</span><h2>Change the look</h2>
       <button type="button" id="avatarPick" class="avatarPicker"><img id="profileAvatar" class="avatar big" alt=""><span>Change photo</span></button>
       <input id="avatarInput" type="file" accept="image/*" hidden />
-      <label>Name<input id="displayName" maxlength="24" placeholder="Your name" /></label>
       <div class="dialogSection"><span class="dialogLabel">Theme</span><div id="dialogThemeGrid" class="themeGrid compact"></div></div>
-      <div class="dialogSection"><span class="dialogLabel">My bubble colour</span><div id="dialogColorChoices" class="colorChoices"></div></div><label class="switchRow"><span>Privacy blur</span><input id="dialogPrivacyToggle" type="checkbox"><i></i></label>
+      <div class="dialogSection"><span class="dialogLabel">My bubble colour</span><div id="dialogColorChoices" class="colorChoices"></div></div>
       <button type="button" id="saveProfile" class="primary full">Save</button>
     </form>
   </dialog>
 
   <dialog id="setupDialog" class="profileDialog setupDialog">
     <form method="dialog" class="dialogCard setupCard">
-      <span class="eyebrow">BEFORE THE FIRST MESSAGE</span><h2>Make this chat feel like yours.</h2>
-      <p class="muted setupText">Name and photo are optional. You can change all of this later.</p>
+      <span class="eyebrow">QUICK CUSTOMIZE</span><h2>Pick the look.</h2>
+      <p class="muted setupText">You can change this later.</p>
       <button type="button" id="setupAvatarPick" class="avatarPicker"><img id="setupAvatar" class="avatar big" alt=""><span>Add a photo</span></button>
       <input id="setupAvatarInput" type="file" accept="image/*" hidden />
-      <label>Name<input id="setupDisplayName" maxlength="24" placeholder="Your name (optional)" /></label>
       <div class="dialogSection"><span class="dialogLabel">Pick a theme</span><div id="setupThemeGrid" class="themeGrid compact"></div></div>
-      <div class="dialogSection"><span class="dialogLabel">Your message colour</span><div id="setupColorChoices" class="colorChoices"></div></div><label class="switchRow"><span>Privacy blur</span><input id="setupPrivacyToggle" type="checkbox"><i></i></label>
+      <div class="dialogSection"><span class="dialogLabel">Your message colour</span><div id="setupColorChoices" class="colorChoices"></div></div>
       <button type="button" id="finishSetup" class="primary full">Save & enter chat</button>
       <button type="button" id="skipSetup" class="textBtn full">Skip for now</button>
     </form>
   </dialog>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js"></script>
+  <dialog id="identityDialog" class="profileDialog identityDialog">
+    <form method="dialog" class="dialogCard identityCard">
+      <span class="eyebrow">HI 👋</span><h2>What should we call you?</h2>
+      <p class="muted">Set this once. New chats will use it automatically.</p>
+      <label>Your name<input id="identityName" maxlength="24" placeholder="Name" autocomplete="name"></label>
+      <label>Username<div class="usernameInput"><span>@</span><input id="identityUsername" maxlength="20" placeholder="username" autocapitalize="none" autocomplete="off"></div></label>
+      <div id="identityError" class="lockError"></div>
+      <button id="saveIdentity" type="button" class="primary full">Continue</button>
+    </form>
+  </dialog>
+
   <div id="privacyShield" class="privacyShield hidden" role="button" tabindex="0" aria-label="Privacy blur active. Double tap to reveal.">
     <div class="privacyShieldCard"><span class="privacyEye">◉</span><strong>Privacy blur</strong><small>Double-tap anywhere to reveal</small></div>
   </div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
 </body>
 </html>

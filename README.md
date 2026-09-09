@@ -1,85 +1,25 @@
-# Just Two
+# Just Two v6
 
-A private two-person chat app with saved messages, images, voice notes, reactions, typing status, presence/last-seen, profiles, and a remembered-chat shortcut on the landing page.
+Two-person private chat with persistent SQLite storage, offline history, images, voice notes, reactions, presence, typing, privacy blur and emergency lock.
 
-## Run on a Mac
+## v6 changes
+- Shorter 3-step first-run guide with Back and First step controls
+- First-run identity popup for name + username; later chat popups are customization only
+- Multiple saved chats/contacts on Home instead of replacing the previous chat
+- Green online, grey offline, yellow last-seen status dots
+- Typing status in the header plus animated three-dot typing bubble
+- Sent/seen receipts
+- Full emoji reaction picker and reaction burst animations
+- Dark animated water treatment for KNY Water Night
+- Dedicated YouTube/Pinterest link sender; YouTube links embed in chat and Pinterest links render as cards
+- Removed the broken chaos spinner; random prompt/joke button remains
+- Dark button fixes and no bright white Copy/action buttons
+- Privacy shield remains instant with double-tap/double-click to reveal; returning visits begin blurred
 
-Use Node.js 22 LTS.
-
+## Run
 ```bash
 npm install
 npm start
 ```
 
-Open http://localhost:3000
-
-## Data safety / persistence
-
-The app saves chat data in SQLite and saves uploaded media on disk. It uses SQLite WAL mode with `synchronous=FULL`, checkpoints on shutdown, and creates rolling database backups every 30 minutes (up to 12 copies).
-
-For cloud hosting, **the database and uploads must live on persistent storage**. Set:
-
-```text
-DATA_DIR=/data
-```
-
-and mount a persistent volume at `/data`. The following will then survive ordinary app restarts/redeploys:
-
-- `/data/chat.db`
-- `/data/uploads/`
-- `/data/backups/`
-
-No storage system can guarantee zero data loss in every possible failure. For important chats, also keep an off-platform backup of the persistent volume/database.
-
-## Emergency lock
-
-The red `!` button in a chat locks the entire app. While locked, chat APIs and uploaded media are blocked and connected users are disconnected. The lock state is saved in SQLite, so restarting the server does not clear it.
-
-Default unlock password: `aryan`
-
-Before publishing publicly, change it with an environment variable:
-
-```text
-EMERGENCY_PASSWORD=your-long-private-password
-```
-
-Do not put the real password in `app.js`, HTML, or GitHub.
-
-## Upload to GitHub
-
-Create an empty repository on GitHub, then in Terminal from this project folder:
-
-```bash
-git init
-git add .
-git commit -m "Initial Just Two chat"
-git branch -M main
-git remote add origin https://github.com/YOUR-USERNAME/YOUR-REPO.git
-git push -u origin main
-```
-
-The `.gitignore` prevents local chat databases, uploads, backups, `.env`, and `node_modules` from being committed.
-
-## Hosting notes
-
-Use a host that supports Node.js, WebSockets, and persistent volumes. Configure:
-
-```text
-DATA_DIR=/data
-EMERGENCY_PASSWORD=change-this-before-public-use
-```
-
-Mount the host's persistent volume at `/data`.
-
-
-## First-visit onboarding
-
-New browsers see a 3-step privacy and usage guide before using the app. It explains the privacy check, how two-person rooms work, offline/saved messages, media features, and that the site works in modern browsers across computers, tablets/iPads, and phones. The guide is stored as completed in that browser so it does not appear on every visit.
-
-### v5 UI notes
-- Removed Red Moon and the dotted/repeating text wallpapers.
-- Added an instant whole-screen privacy shield; double-click or double-tap the blurred shield to reveal.
-- Returning visits start behind the privacy shield.
-- JJK Infinity and KNY Water Night now use original CSS/SVG character-inspired illustrations rather than copied show artwork.
-- YouTube links render inline players; Pinterest links render dedicated cards.
-- Added GIF-by-link sending and a sticker tray, plus custom sticker image upload.
+For Railway keep `DATA_DIR=/data` and the persistent volume mounted at `/data`.
