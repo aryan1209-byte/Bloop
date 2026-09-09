@@ -28,7 +28,6 @@
     <div class="lockPanel">
       <div class="lockIcon">■</div>
       <h1>Just Two is locked</h1>
-      <p>Chat, photos and voice notes are hidden until the app is unlocked.</p>
       <form id="unlockForm">
         <input id="unlockPassword" type="password" autocomplete="current-password" placeholder="Password" aria-label="Emergency unlock password" />
         <button class="primary full">Unlock</button>
@@ -46,7 +45,7 @@
           <h1>Just Two</h1>
         </div>
       </div>
-      <p class="homeLead">Your private corner for messages, photos, voice notes and whatever chaos happens next.</p>
+      <p class="homeLead">Your private corner for messages, photos, voice notes and whatever happens next.</p>
 
       <div id="inviteCard" class="inviteCard hidden">
         <div class="inviteIcon">↘</div>
@@ -54,27 +53,27 @@
         <div class="inviteActions"><button id="declineInviteBtn" class="secondary" type="button">Not now</button><button id="acceptInviteBtn" class="primary" type="button">Accept & join</button></div>
       </div>
 
+      <div class="landingActions"><button id="createBtn" class="primary">Make a new chat</button></div>
+
       <section id="contactsWidget" class="homeWidget contactsWidget hidden">
         <div class="widgetHeading"><div><span class="eyebrow">YOUR CHATS</span><h2>People</h2></div><small id="contactsCount" class="muted"></small></div>
-        <div id="contactsList" class="contactsList"></div>
+        <div id="contactsList" class="contactsList"></div><div id="homeNotice" class="homeNotice hidden" aria-live="polite"></div>
       </section>
 
       <section class="homeWidget">
-        <div class="widgetHeading"><div><span class="eyebrow">MAKE IT YOURS</span><h2>Pick a vibe</h2></div><button id="shuffleVibe" class="tinyBtn" type="button">Surprise me</button></div>
+        <div class="widgetHeading"><div><span class="eyebrow">MAKE IT YOURS</span><h2>Pick a vibe</h2></div><button id="shuffleVibe" class="tinyBtn" type="button">surprise me!</button></div>
         <div id="themeGrid" class="themeGrid" aria-label="Theme choices"></div>
         <div class="colorRow"><span>My message colour</span><div id="colorChoices" class="colorChoices"></div></div>
       </section>
 
-      <section class="homeWidget funZone simpleFun">
-        <div class="funCopy"><span class="eyebrow">RANDOM CHAOS</span><h2 id="funType">MOOD</h2><div id="funResult" class="funResult">quietly chaotic</div></div>
-        <button id="funBtn" class="tinyBtn" type="button">Give me another</button>
-      </section>
 
       <section class="homeWidget privacyWidget">
         <div><span class="eyebrow">PRIVACY</span><h2>Need the screen hidden fast?</h2><p class="muted">Tap ◉ at the top. Everything blurs instantly. Double-tap the blur to come back.</p></div>
       </section>
+      <section class="homeWidget privacyWidget">
+        <div><span class="eyebrow">EMERGENCY</span><h2>Need to close the app immediately?</h2><p class="muted">Tap ! at the top. Everything closes instantly. Enter the password to come back.</p></div>
+      </section>
 
-      <div class="landingActions"><button id="createBtn" class="primary">Make a new chat</button></div>
     </section>
 
     <section id="share" class="card shareView hidden">
@@ -101,12 +100,14 @@
 
       <form id="form" class="composer">
         <button type="button" id="emojiBtn" class="toolBtn" aria-label="Emoji">☺</button>
-        <button type="button" id="imageBtn" class="toolBtn" aria-label="Add image">＋</button>
+        <button type="button" id="imageBtn" class="toolBtn" aria-label="Add image from gallery" title="Photo library">＋</button>
+        <button type="button" id="cameraBtn" class="toolBtn cameraBtn" aria-label="Take a photo" title="Camera">📷</button>
         <button type="button" id="linkBtn" class="toolBtn" aria-label="Send YouTube or Pinterest link" title="YouTube / Pinterest">↗</button>
         <textarea id="input" maxlength="2000" rows="1" placeholder="Message" autocomplete="off"></textarea>
         <button type="button" id="voiceBtn" class="toolBtn voice" aria-label="Record voice note">🎙</button>
         <button class="send" aria-label="Send">➤</button>
         <input id="imageInput" type="file" accept="image/*" hidden />
+        <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden />
       </form>
       <div id="linkTray" class="linkTray hidden"><input id="linkInput" type="url" placeholder="Paste a YouTube or Pinterest link"><button id="sendLinkBtn" type="button">Send</button><button id="closeLinkTray" type="button">×</button></div>
       <div id="emojiTray" class="emojiTray hidden"><div class="emojiHeader"><input id="emojiSearch" placeholder="Emoji"><button id="closeEmoji" type="button">×</button></div><div id="emojiCategories" class="emojiCategories"></div><div id="emojiGrid" class="emojiGrid"></div></div>
@@ -153,7 +154,7 @@
   </dialog>
 
   <div id="privacyShield" class="privacyShield hidden" role="button" tabindex="0" aria-label="Privacy blur active. Double tap to reveal.">
-    <div class="privacyShieldCard"><span class="privacyEye">◉</span><strong>Privacy blur</strong><small>Double-tap anywhere to reveal</small></div>
+    <div class="privacyShieldCard"><span class="privacyEye">◉</span><strong>Clock-it Twice</strong><small> on the screen.</small></div>
   </div>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/app.js"></script>

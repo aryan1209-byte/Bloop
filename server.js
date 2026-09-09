@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   avatar_url TEXT,
   last_seen INTEGER,
   username TEXT,
+  activity_status TEXT,
+  status_at INTEGER,
   PRIMARY KEY(room_id, role),
   FOREIGN KEY(room_id) REFERENCES rooms(id) ON DELETE CASCADE
 );
@@ -85,6 +87,8 @@ for (const [name, sql] of [
 const profileColumns = db.prepare('PRAGMA table_info(profiles)').all().map(c => c.name);
 if (!profileColumns.includes('last_seen')) db.exec(`ALTER TABLE profiles ADD COLUMN last_seen INTEGER`);
 if (!profileColumns.includes('username')) db.exec(`ALTER TABLE profiles ADD COLUMN username TEXT`);
+if (!profileColumns.includes('activity_status')) db.exec(`ALTER TABLE profiles ADD COLUMN activity_status TEXT`);
+if (!profileColumns.includes('status_at')) db.exec(`ALTER TABLE profiles ADD COLUMN status_at INTEGER`);
 
 
 const EMERGENCY_PASSWORD = process.env.EMERGENCY_PASSWORD || 'aryan';
@@ -135,12 +139,12 @@ function authRequest(req) {
 }
 
 function getProfiles(roomId) {
-  const rows = db.prepare('SELECT role, display_name AS displayName, avatar_url AS avatarUrl, username FROM profiles WHERE room_id = ?').all(roomId);
+  const rows = db.prepare('SELECT role, display_name AS displayName, avatar_url AS avatarUrl, username, last_seen AS lastSeen, activity_status AS activityStatus, status_at AS statusAt FROM profiles WHERE room_id = ?').all(roomId);
   const out = {
-    creator: { displayName: 'You', avatarUrl: null, username: '' },
-    guest: { displayName: 'Friend', avatarUrl: null, username: '' }
+    creator: { displayName: 'You', avatarUrl: null, username: '', lastSeen: null, activityStatus: null, statusAt: null },
+    guest: { displayName: 'Friend', avatarUrl: null, username: '', lastSeen: null, activityStatus: null, statusAt: null }
   };
-  for (const p of rows) out[p.role] = { displayName: p.displayName || (p.role === 'creator' ? 'You' : 'Friend'), avatarUrl: p.avatarUrl || null, username: p.username || '' };
+  for (const p of rows) out[p.role] = { displayName: p.displayName || (p.role === 'creator' ? 'You' : 'Friend'), avatarUrl: p.avatarUrl || null, username: p.username || '', lastSeen: p.lastSeen || null, activityStatus: p.activityStatus || null, statusAt: p.statusAt || null };
   return out;
 }
 
@@ -170,10 +174,12 @@ function presencePayload(roomId) {
     const s = io.sockets.sockets.get(socketId);
     if (s?.data?.role) onlineRoles.add(s.data.role);
   }
-  const rows = db.prepare('SELECT role, last_seen AS lastSeen FROM profiles WHERE room_id = ?').all(roomId);
+  const rows = db.prepare('SELECT role, last_seen AS lastSeen, activity_status AS activityStatus, status_at AS statusAt FROM profiles WHERE room_id = ?').all(roomId);
   const lastSeen = { creator: null, guest: null };
-  for (const row of rows) lastSeen[row.role] = row.lastSeen || null;
-  return { online: [...onlineRoles], lastSeen };
+  const activity = { creator: null, guest: null };
+  const statusAt = { creator: null, guest: null };
+  for (const row of rows) { lastSeen[row.role] = row.lastSeen || null; activity[row.role] = row.activityStatus || null; statusAt[row.role] = row.statusAt || null; }
+  return { online: [...onlineRoles], lastSeen, activity, statusAt };
 }
 
 function emitPresence(roomId) {
@@ -250,7 +256,8 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
 app.get('/api/rooms/:roomId/messages', (req, res) => {
   const auth = authRequest(req);
   if (!auth) return res.status(401).json({ error: 'Not authorized.' });
-  res.json({ role: auth.role, messages: serializeMessages(req.params.roomId), profiles: getProfiles(req.params.roomId) });
+  const unreadCount = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE room_id = ? AND sender != ? AND seen_at IS NULL AND deleted_at IS NULL').get(req.params.roomId, auth.role).n;
+  res.json({ role: auth.role, messages: serializeMessages(req.params.roomId), profiles: getProfiles(req.params.roomId), presence: presencePayload(req.params.roomId), unreadCount });
 });
 
 app.patch('/api/rooms/:roomId/profile', (req, res) => {
@@ -267,6 +274,18 @@ app.patch('/api/rooms/:roomId/profile', (req, res) => {
   const profile = getProfiles(req.params.roomId)[auth.role];
   io.to(req.params.roomId).emit('profile', { role: auth.role, ...profile });
   res.json(profile);
+});
+
+app.post('/api/rooms/:roomId/activity-status', (req, res) => {
+  const auth = authRequest(req);
+  if (!auth) return res.status(401).json({ error: 'Not authorized.' });
+  const raw = String(req.body?.status || 'active');
+  if (!['active','blurred','emergency'].includes(raw)) return res.status(400).json({ error: 'Invalid status.' });
+  const stored = raw === 'active' ? null : raw;
+  const now = Date.now();
+  db.prepare('UPDATE profiles SET activity_status = ?, status_at = ? WHERE room_id = ? AND role = ?').run(stored, now, req.params.roomId, auth.role);
+  emitPresence(req.params.roomId);
+  res.json({ ok: true, status: raw, statusAt: now });
 });
 
 app.post('/api/rooms/:roomId/upload/:kind', express.raw({ type: '*/*', limit: '8mb' }), (req, res) => {
@@ -317,11 +336,21 @@ io.use((socket, next) => {
 io.on('connection', socket => {
   const { roomId, role } = socket.data;
   socket.join(roomId);
-  db.prepare('UPDATE profiles SET last_seen = ? WHERE room_id = ? AND role = ?').run(Date.now(), roomId, role);
+  db.prepare('UPDATE profiles SET last_seen = ?, activity_status = NULL, status_at = ? WHERE room_id = ? AND role = ?').run(Date.now(), Date.now(), roomId, role);
   emitPresence(roomId);
 
   socket.on('typing', value => {
     socket.to(roomId).emit('typing', { role, typing: Boolean(value) });
+  });
+
+  socket.on('activity-status', (value, ack) => {
+    const raw = String(value || 'active');
+    if (!['active','blurred','emergency'].includes(raw)) { if (typeof ack === 'function') ack({ ok: false }); return; }
+    const stored = raw === 'active' ? null : raw;
+    const now = Date.now();
+    db.prepare('UPDATE profiles SET activity_status = ?, status_at = ? WHERE room_id = ? AND role = ?').run(stored, now, roomId, role);
+    emitPresence(roomId);
+    if (typeof ack === 'function') ack({ ok: true });
   });
 
   socket.on('message', raw => {

@@ -29,6 +29,7 @@ let currentRoom = null, authToken = null, myRole = null, socket = null;
 let profiles = { creator:{displayName:'You',avatarUrl:null}, guest:{displayName:'Friend',avatarUrl:null} };
 let recorder=null, recordedChunks=[], recordTimer=null, recordStarted=0;
 let lastPresence={}, typingTimer=null, sentTyping=false, otherTyping=false;
+let homeRefreshTimer=null, homeRefreshBusy=false, lastHomeUnreadTotal=0, homeUnreadReady=false;
 const storageKey=id=>`justtwo:${id}:auth`;
 const roleKey=id=>`justtwo:${id}:role`;
 const lastRoomKey='justtwo:lastRoom';
@@ -141,33 +142,58 @@ function refreshHeader(){
   setAvatar($('setupAvatar'),myRole);
 }
 
-async function setupContacts(){
+function contactPresence(data, role){
+  const presence=data.presence||{};
+  const activity=presence.activity?.[role] || data.profiles?.[role]?.activityStatus || null;
+  if(activity==='emergency')return{label:'emergency button pressed',cls:'emergency'};
+  if(activity==='blurred')return{label:'screen blurred',cls:'blurred'};
+  const online=new Set(presence.online||[]);
+  if(online.has(role))return{label:'online',cls:'online'};
+  const seen=presence.lastSeen?.[role] || data.profiles?.[role]?.lastSeen;
+  if(seen)return{label:formatLastSeen(seen),cls:'lastseen'};
+  return{label:'offline',cls:'offline'};
+}
+function showHomeNotice(text){const n=$('homeNotice');if(!n)return;n.textContent=text;n.classList.remove('hidden');clearTimeout(showHomeNotice.t);showHomeNotice.t=setTimeout(()=>n.classList.add('hidden'),3200);}
+async function setupContacts({notify=false}={}){
+  if(homeRefreshBusy)return;homeRefreshBusy=true;
   const ids=getRooms(); $('contactsWidget').classList.toggle('hidden',ids.length===0); $('contactsList').innerHTML='';
-  const valid=[];
+  const valid=[];let totalUnread=0;let newestName='Friend';
   for(const id of ids){
     const token=localStorage.getItem(storageKey(id)); if(!token)continue;
     try{
-      const r=await fetch(`/api/rooms/${encodeURIComponent(id)}/messages`,{headers:{'x-chat-token':token}}); if(!r.ok)continue;
+      const r=await fetch(`/api/rooms/${encodeURIComponent(id)}/messages`,{headers:{'x-chat-token':token},cache:'no-store'}); if(!r.ok)continue;
       const data=await r.json(); valid.push(id); const role=data.role||localStorage.getItem(roleKey(id)); const other=role==='creator'?'guest':'creator'; const p=(data.profiles||{})[other]||{displayName:'Friend',avatarUrl:null,username:''};
+      const unread=Number(data.unreadCount||0);totalUnread+=unread;if(unread)newestName=p.displayName||'Friend';
+      const state=contactPresence(data,other);
       const card=document.createElement('button');card.type='button';card.className='contactCard';
+      const imgWrap=document.createElement('span');imgWrap.className='contactAvatarWrap';
       const img=document.createElement('img');img.className='avatar continueAvatar';img.alt='';
       if(p.avatarUrl)img.src=p.avatarUrl;else{const initial=(p.displayName||'Friend').trim().charAt(0).toUpperCase()||'?';img.src=`data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="100%" height="100%" rx="48" fill="#23262b"/><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" fill="white" font-family="Arial" font-size="40" font-weight="700">${initial}</text></svg>`)}`;}
-      const copy=document.createElement('span');copy.className='contactText';const last=data.messages?.at(-1);const sub=last?(last.type==='text'?(last.body||'Message').slice(0,55):last.type==='image'?'Photo':'Voice note'):'No messages yet';copy.innerHTML=`<strong>${escapeHtml(p.displayName||'Friend')}</strong><small>${p.username?'@'+escapeHtml(p.username)+' · ':''}${escapeHtml(sub)}</small>`;
-      const arrow=document.createElement('span');arrow.className='contactArrow';arrow.textContent='→';card.append(img,copy,arrow);card.onclick=()=>resumeRoom(id,true);$('contactsList').append(card);
+      const statusDot=document.createElement('span');statusDot.className=`presenceDot contactPresenceDot ${state.cls}`;imgWrap.append(img,statusDot);
+      const copy=document.createElement('span');copy.className='contactText';const last=data.messages?.at(-1);const sub=last?(last.type==='text'?(last.body||'Message').slice(0,55):last.type==='image'?'Photo':'Voice note'):'No messages yet';
+      copy.innerHTML=`<span class="contactNameRow"><strong>${escapeHtml(p.displayName||'Friend')}</strong><span class="contactStatus ${state.cls}">${escapeHtml(state.label)}</span></span><small>${p.username?'@'+escapeHtml(p.username)+' · ':''}${escapeHtml(sub)}</small>`;
+      const side=document.createElement('span');side.className='contactSide';if(unread){const badge=document.createElement('span');badge.className='unreadBadge';badge.textContent=unread===1?'1 new':`${unread} new`;side.append(badge);}const arrow=document.createElement('span');arrow.className='contactArrow';arrow.textContent='→';side.append(arrow);
+      card.append(imgWrap,copy,side);card.onclick=()=>resumeRoom(id,true);$('contactsList').append(card);
     }catch{}
   }
   if(valid.length!==ids.length)localStorage.setItem(roomsKey,JSON.stringify(valid));
   $('contactsCount').textContent=valid.length?`${valid.length} saved`:'';$('contactsWidget').classList.toggle('hidden',valid.length===0);
+  document.title=totalUnread?`(${totalUnread}) Just Two`:'Just Two';
+  if(homeUnreadReady&&notify&&totalUnread>lastHomeUnreadTotal)showHomeNotice(`${totalUnread-lastHomeUnreadTotal} new message${totalUnread-lastHomeUnreadTotal===1?'':'s'} from ${newestName}`);
+  lastHomeUnreadTotal=totalUnread;homeUnreadReady=true;homeRefreshBusy=false;
 }
+function startHomeRefresh(){clearInterval(homeRefreshTimer);homeRefreshTimer=setInterval(()=>{if(!$('landing').classList.contains('hidden'))setupContacts({notify:true});},5000);}
+function stopHomeRefresh(){clearInterval(homeRefreshTimer);homeRefreshTimer=null;}
 
 function showInviteCard(){ $('inviteCard').classList.toggle('hidden',!pendingInvite); }
 async function goHome(replace=true){
-  socket?.disconnect(); setTyping(false); show('landing'); showInviteCard(); await setupContacts();
+  socket?.disconnect(); setTyping(false); show('landing'); showInviteCard(); await setupContacts({notify:false}); startHomeRefresh();
   if(replace) history.replaceState({view:'home'},'',pendingInvite?`/?room=${encodeURIComponent(inviteRoomId)}&invite=${encodeURIComponent(inviteToken)}`:'/');
 }
 $('shareBackBtn').onclick=()=>goHome(); $('errorHomeBtn').onclick=()=>goHome(); $('chatBackBtn').onclick=()=>history.back();
 
 $('createBtn').onclick=async()=>{
+  stopHomeRefresh();
   const r=await fetch('/api/rooms',{method:'POST'}); const data=await r.json(); if(!r.ok)return fail(data.error||'Could not create chat.');
   currentRoom=data.roomId;authToken=data.creatorToken;myRole='creator';
   localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);rememberRoom(currentRoom);
@@ -188,6 +214,7 @@ $('declineInviteBtn').onclick=()=>{pendingInvite=false;history.replaceState({vie
 function fail(message){$('errorText').textContent=message;show('error');}
 async function resumeRoom(id,pushHistory=true){currentRoom=id;authToken=localStorage.getItem(storageKey(id));myRole=localStorage.getItem(roleKey(id));if(!authToken)return fail('This browser does not have access to that private chat.');await openChat(pushHistory);}
 async function openChat(pushHistory=true){
+  stopHomeRefresh();
   if(!currentRoom||!authToken)return fail('Missing chat access.');
   const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/messages`,{headers:{'x-chat-token':authToken}});const data=await r.json();if(!r.ok)return fail(data.error||'Could not open chat.');
   myRole=data.role;profiles=data.profiles||profiles;rememberRoom(currentRoom);await syncIdentityToRoom();refreshHeader();
@@ -210,24 +237,31 @@ function connectSocket(){
   socket.on('seen',({messageIds,seenAt})=>{(messageIds||[]).forEach(id=>markSeen(id,seenAt));});
   socket.on('connect',()=>{socket.emit('seen');});
   socket.on('message-deleted',({messageId})=>markDeleted(messageId));
-  socket.on('profile',data=>{profiles[data.role]={displayName:data.displayName,avatarUrl:data.avatarUrl,username:data.username||''};refreshHeader();document.querySelectorAll(`[data-sender="${data.role}"] .messageAvatar`).forEach(img=>setAvatar(img,data.role));});
+  socket.on('profile',data=>{profiles[data.role]={...(profiles[data.role]||{}),displayName:data.displayName,avatarUrl:data.avatarUrl,username:data.username||''};refreshHeader();document.querySelectorAll(`[data-sender="${data.role}"] .messageAvatar`).forEach(img=>setAvatar(img,data.role));});
   socket.on('emergency-lock',()=>showEmergencyLock());
   socket.on('connect_error',err=>{if(err?.message==='app_locked')showEmergencyLock();else $('presence').textContent='connection lost';});
 }
 function formatLastSeen(ts){if(!ts)return'offline';const d=new Date(ts),now=new Date(),same=d.toDateString()===now.toDateString(),y=new Date(now);y.setDate(now.getDate()-1);const time=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});if(same)return`last seen today at ${time}`;if(d.toDateString()===y.toDateString())return`last seen yesterday at ${time}`;return`last seen ${d.toLocaleDateString([],{month:'short',day:'numeric'})} at ${time}`;}
-function updatePresence(data={}){const other=myRole==='creator'?'guest':'creator';const online=new Set(data.online||[]);const p=$('presence'),dot=$('presenceDot');let next,cls;if(otherTyping&&online.has(other)){next='typing…';cls='online';}else if(online.has(other)){next='online';cls='online';}else if(data.lastSeen?.[other]){next=formatLastSeen(data.lastSeen[other]);cls='lastseen';}else{next='offline';cls='offline';}dot.className=`presenceDot ${cls}`;if(p.textContent!==next){p.textContent=next;p.classList.remove('statusPulse');void p.offsetWidth;p.classList.add('statusPulse');}}
+function updatePresence(data={}){const other=myRole==='creator'?'guest':'creator';const online=new Set(data.online||[]);const p=$('presence'),dot=$('presenceDot');const activity=data.activity?.[other]||profiles[other]?.activityStatus;let next,cls;if(activity==='emergency'){next='emergency button pressed';cls='emergency';}else if(activity==='blurred'){next='screen blurred';cls='blurred';}else if(otherTyping&&online.has(other)){next='typing…';cls='online';}else if(online.has(other)){next='online';cls='online';}else if(data.lastSeen?.[other]||profiles[other]?.lastSeen){next=formatLastSeen(data.lastSeen?.[other]||profiles[other]?.lastSeen);cls='lastseen';}else{next='offline';cls='offline';}dot.className=`presenceDot ${cls}`;if(p.textContent!==next){p.textContent=next;p.classList.remove('statusPulse');void p.offsetWidth;p.classList.add('statusPulse');}}
 function updateTypingBubble(){$('typingBubble').classList.toggle('hidden',!otherTyping);if(otherTyping)setTimeout(scrollBottom,20);}
 function setTyping(value){if(!socket?.connected)return;if(sentTyping!==value){sentTyping=value;socket.emit('typing',value);}clearTimeout(typingTimer);if(value)typingTimer=setTimeout(()=>setTyping(false),1400);}
 function clearEmpty(){if($('messages').querySelector('.empty'))$('messages').innerHTML='';}
 
 const reactionChoices=[...new Set(Object.values(emojiData).flat())];
+async function broadcastActivityStatus(status){
+  if(socket?.connected)socket.emit('activity-status',status);
+  const jobs=getRooms().map(id=>{const token=localStorage.getItem(storageKey(id));if(!token)return null;return fetch(`/api/rooms/${encodeURIComponent(id)}/activity-status`,{method:'POST',headers:{'content-type':'application/json','x-chat-token':token},body:JSON.stringify({status}),keepalive:true}).catch(()=>null);}).filter(Boolean);
+  if(jobs.length)await Promise.allSettled(jobs);
+}
 function engagePrivacyShield(){
   $('privacyShield')?.classList.remove('hidden');
   document.body.classList.add('privacyLocked');
+  broadcastActivityStatus('blurred');
 }
 function releasePrivacyShield(){
   $('privacyShield')?.classList.add('hidden');
   document.body.classList.remove('privacyLocked');
+  broadcastActivityStatus('active');
 }
 let lastShieldTap=0;
 function shieldTap(){
@@ -299,6 +333,7 @@ $('form').addEventListener('submit',e=>{e.preventDefault();const value=$('input'
 $('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('form').requestSubmit();}});
 $('input').addEventListener('input',e=>{e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,130)+'px';setTyping(Boolean(e.target.value.trim()));});$('input').addEventListener('blur',()=>setTyping(false));
 $('imageBtn').onclick=()=>$('imageInput').click();$('imageInput').onchange=async()=>{const file=$('imageInput').files[0];if(file)await uploadMedia('image',file);$('imageInput').value='';};
+$('cameraBtn').onclick=()=>$('cameraInput').click();$('cameraInput').onchange=async()=>{const file=$('cameraInput').files[0];if(file)await uploadMedia('image',file);$('cameraInput').value='';};
 async function uploadMedia(kind,blob){const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/upload/${kind}`,{method:'POST',headers:{'x-chat-token':authToken,'content-type':blob.type||'application/octet-stream'},body:blob});const data=await r.json().catch(()=>({}));if(!r.ok)alert(data.error||'Upload failed.');return data;}
 $('voiceBtn').onclick=async()=>{if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)return alert('Voice recording is not supported in this browser.');try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});recordedChunks=[];const preferred=['audio/webm;codecs=opus','audio/mp4'].find(t=>MediaRecorder.isTypeSupported(t));recorder=new MediaRecorder(stream,preferred?{mimeType:preferred}:undefined);recorder.ondataavailable=e=>{if(e.data.size)recordedChunks.push(e.data);};recorder.onstop=()=>stream.getTracks().forEach(t=>t.stop());recorder.start();recordStarted=Date.now();$('recordingBar').classList.remove('hidden');$('form').classList.add('recording');recordTimer=setInterval(()=>{const s=Math.floor((Date.now()-recordStarted)/1000);$('recordTime').textContent=`Recording ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;},250);}catch{alert('Microphone permission is needed for voice notes.');}};
 function stopRecording(){if(recorder&&recorder.state!=='inactive')recorder.stop();clearInterval(recordTimer);$('recordingBar').classList.add('hidden');$('form').classList.remove('recording');}
@@ -325,14 +360,13 @@ $('saveIdentity').onclick=async()=>{
 function showEmergencyLock(){socket?.disconnect();setTyping(false);$('lockScreen').classList.remove('hidden');$('unlockPassword').value='';$('unlockError').textContent='';setTimeout(()=>$('unlockPassword').focus(),50);}
 function hideEmergencyLock(){$('lockScreen').classList.add('hidden');}
 $('unlockForm').addEventListener('submit',async e=>{e.preventDefault();const password=$('unlockPassword').value;const r=await fetch('/api/emergency/unlock',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password})});const data=await r.json().catch(()=>({}));if(!r.ok){$('unlockError').textContent=data.error||'Could not unlock.';$('unlockPassword').select();return;}hideEmergencyLock();location.reload();});
-async function emergencyLock(){
-  let room=currentRoom,token=authToken;
-  if(!room||!token){room=localStorage.getItem(lastRoomKey);token=room?localStorage.getItem(storageKey(room)):null;}
-  if(!room||!token)return alert('Emergency lock becomes available after this browser has access to a chat.');
-  if(!confirm('Lock the entire app now? Everyone will be kicked out until the emergency password is entered.'))return;
-  const r=await fetch('/api/emergency/lock',{method:'POST',headers:{'content-type':'application/json','x-chat-token':token},body:JSON.stringify({roomId:room})});if(!r.ok){const data=await r.json().catch(()=>({}));return alert(data.error||'Could not lock the app.');}showEmergencyLock();
+const emergencySearches=['cats','dogs','cute capybaras','space facts','easy pasta recipes','funny animals','sunsets','house plants','cloud pictures','football scores','ocean waves','pandas','weather today','best pancakes'];
+async function emergencyExit(){
+  const q=emergencySearches[Math.floor(Math.random()*emergencySearches.length)];
+  try{await Promise.race([broadcastActivityStatus('emergency'),new Promise(r=>setTimeout(r,220))]);}catch{}
+  location.replace(`https://www.google.com/search?q=${encodeURIComponent(q)}`);
 }
-$('emergencyBtn').onclick=emergencyLock;$('globalEmergencyBtn').onclick=emergencyLock;
+$('emergencyBtn').onclick=emergencyExit;$('globalEmergencyBtn').onclick=emergencyExit;
 
 window.addEventListener('popstate',async()=>{
   if(location.pathname==='/'||!location.pathname.startsWith('/chat/')){await goHome(false);return;}
