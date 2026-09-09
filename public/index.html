@@ -3,123 +3,112 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#fff7e8" />
+  <meta name="theme-color" content="#f7f7f2" />
   <title>Just Two</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
-<body>
+<body data-theme="classic" data-bubble="blue">
+  <div class="globalBar">
+    <button id="homeBtn" class="globalHome" type="button" aria-label="Home">✦ Just Two</button>
+    <div class="globalRight"><span id="globalClock" class="clock">--:--</span><button id="globalEmergencyBtn" class="dangerBtn globalEmergency" type="button" title="Emergency lock" aria-label="Emergency lock">!</button></div>
+  </div>
 
-  <section id="onboarding" class="onboarding hidden" aria-live="polite" aria-modal="true" role="dialog">
+  <section id="onboarding" class="overlay hidden" aria-live="polite" aria-modal="true" role="dialog">
     <div class="onboardingPanel">
+      <div class="overlayTop"><span class="clock">--:--</span><button class="dangerBtn overlayEmergency emergencyAction" type="button" aria-label="Emergency lock">!</button></div>
       <div class="onboardingProgress"><span id="onboardingProgress"></span></div>
-
       <div class="onboardingStep" data-step="0">
-        <div class="onboardingIcon">👀</div>
-        <h2>Quick privacy check</h2>
-        <p>Before you open your chat, make sure nobody around you can see your screen.</p>
-        <button class="primary full onboardingNext" type="button">I'm ready</button>
+        <div class="onboardingIcon">👋</div><h2>Welcome to Just Two</h2>
+        <p>One private chat, made for two browsers. Here’s the quick tour so nothing feels confusing.</p>
+        <button class="primary full onboardingNext" type="button">Show me around</button>
       </div>
-
       <div class="onboardingStep hidden" data-step="1">
-        <div class="onboardingIcon">✦</div>
-        <h2>How "Just Two" works</h2>
+        <div class="onboardingIcon">🔗</div><h2>Make it, send it, claim it</h2>
         <div class="instructionList">
-          <div><b>1</b><span>Create a chat and send the invite link to one person.</span></div>
-          <div><b>2</b><span>The first person who joins becomes the second person in that chat.</span></div>
-          <div><b>3</b><span>Messages are saved, so either person can send while the other is offline and they can catch up later.</span></div>
-          <div><b>4</b><span>You can use reactions, photos, voice notes, profile pictures and the typing indicator.</span></div>
+          <div><b>1</b><span>Make a chat and send its invite link to the person you want.</span></div>
+          <div><b>2</b><span>The invite appears on their home screen. They choose whether to accept it.</span></div>
+          <div><b>3</b><span>Once accepted, that browser becomes the second spot in the chat.</span></div>
+          <div><b>4</b><span>Messages, photos and voice notes stay in the chat so you can catch up later.</span></div>
         </div>
-        <button class="primary full onboardingNext" type="button">Got it</button>
+        <button class="primary full onboardingNext" type="button">Next</button>
       </div>
-
       <div class="onboardingStep hidden" data-step="2">
-        <div class="onboardingIcon">📱</div>
-        <h2>Use it on your devices</h2>
-        <p>Just Two works in a modern browser, so you can use it from a Mac, PC, iPad, tablet or phone. Your chat identity is remembered by that browser.</p>
-        <div class="onboardingNote">Tip: keep your invite link private. Anyone who gets an unused invite link could try to claim the second spot.</div>
-        <button id="finishOnboarding" class="primary full" type="button">Enter Just Two</button>
+        <div class="onboardingIcon">🎛️</div><h2>Make it yours</h2>
+        <p>Set a name and photo if you want, pick a theme, change your message colour, react by holding a message, and use the full emoji tray.</p>
+        <div class="onboardingNote">Your browser remembers your chat access. Keep unused invite links to people you actually want in the chat.</div>
+        <button id="finishOnboarding" class="primary full" type="button">Go to home</button>
       </div>
     </div>
   </section>
-  <section id="lockScreen" class="lockScreen hidden" aria-live="assertive">
-    <div class="lockPanel">
-      <div class="lockIcon">■</div>
-      <h1>Just Two is locked</h1>
-      <form id="unlockForm">
-        <input id="unlockPassword" type="password" autocomplete="current-password" placeholder="Password" aria-label="Emergency unlock password" />
-        <button class="primary full">Unlock</button>
-      </form>
-      <div id="unlockError" class="lockError"></div>
+
+  <section id="readyScreen" class="overlay hidden" aria-modal="true" role="dialog">
+    <div class="readyPanel">
+      <div class="overlayTop"><span class="clock">--:--</span><button class="dangerBtn overlayEmergency emergencyAction" type="button" aria-label="Emergency lock">!</button></div>
+      <div class="readyIcon">👀</div><h2>Ready?</h2>
+      <p>If you want this chat to be private, check that you’re comfortable with who can see your screen right now.</p>
+      <div class="readyTime" id="readyClock">--:--</div>
+      <button id="readyBtn" class="primary full" type="button">I’m ready</button>
     </div>
   </section>
-  <div class="blob blob-one"></div><div class="blob blob-two"></div>
+
+  <section id="lockScreen" class="lockScreen hidden" aria-live="assertive">
+    <div class="lockPanel"><div class="lockIcon">■</div><h1>Just Two is locked</h1><p>Chat, photos and voice notes are hidden until the app is unlocked.</p>
+      <form id="unlockForm"><input id="unlockPassword" type="password" autocomplete="current-password" placeholder="Password" aria-label="Emergency unlock password" /><button class="primary full">Unlock</button></form><div id="unlockError" class="lockError"></div>
+    </div>
+  </section>
+
   <main class="shell">
     <section id="landing" class="card landing">
-      <div class="logo">✦</div>
+      <div class="heroLine"><div class="logo">✦</div><span class="homeTime clock">--:--</span></div>
       <h1>Just Two</h1>
-      <p class="muted">A private two-person chat. One link, one friend, one conversation.</p>
-      <p class="tagline">No more mixing chats. No more wrong chat, sorry. 😭</p>
-      <div class="featurePills"><span>💬 saved chat</span><span>🔒 2 people</span><span>📸 photos + voice</span></div>
+      <p class="muted">One person. One chat. That’s the whole idea.</p>
+      <p class="tagline">No more “wrong chat, sorry” 😭</p>
+      <div class="featurePills"><span>💬 saved</span><span>🔒 two spots</span><span>📸 photos + voice</span></div>
+
+      <div id="inviteCard" class="inviteCard hidden">
+        <div class="inviteIcon">💌</div><div class="inviteText"><span>You’ve got an invite</span><strong>Someone wants to start a Just Two chat.</strong></div>
+        <button id="acceptInviteBtn" class="primary" type="button">Accept</button>
+      </div>
 
       <div id="continueCard" class="continueCard hidden">
-        <img id="continueAvatar" class="avatar continueAvatar" alt="">
-        <div class="continueText">
-          <span>Continue your chat</span>
-          <strong id="continueName">Friend</strong>
-        </div>
-        <button id="continueBtn" class="continueBtn" type="button">Open →</button>
+        <img id="continueAvatar" class="avatar continueAvatar" alt=""><div class="continueText"><span>Continue your chat</span><strong id="continueName">Friend</strong></div><button id="continueBtn" class="continueBtn" type="button">Open →</button>
       </div>
 
-      <div class="landingActions">
-        <button id="createBtn" class="primary">Make a new chat</button>
-      </div>
+      <div class="funCard"><span class="funLabel">tiny conversation starter</span><strong id="promptText">What’s something oddly specific that made you laugh today?</strong><button id="shufflePrompt" class="textBtn" type="button">shuffle ↻</button></div>
+
+      <details class="customizeCard"><summary>🎨 Customize home + chat</summary>
+        <div class="customGrid">
+          <label>Theme<select id="themeSelect"><option value="classic">Classic</option><option value="cursed">Cursed Energy · JJK</option><option value="demon">Demon Hunt · KNY</option><option value="classroom">Classroom Chaos</option><option value="tokyo">Neon Tokyo</option><option value="midnight">Midnight</option></select></label>
+          <label>Your message colour<select id="bubbleSelect"><option value="blue">Blue</option><option value="red">Red</option><option value="green">Green</option><option value="purple">Purple</option><option value="orange">Orange</option><option value="black">Black</option></select></label>
+        </div>
+        <p class="tinyMuted">Themes use original colour palettes only — no character art or show assets.</p>
+      </details>
+
+      <div class="landingActions"><button id="createBtn" class="primary">Make a new chat</button></div>
     </section>
 
     <section id="share" class="card hidden">
-      <div class="logo small">↗</div>
-      <h2>Your link is ready</h2>
-      <p class="muted">Send it privately. The first person to open it claims the second spot.</p>
-      <div class="shareRow"><input id="shareLink" readonly /><button id="copyBtn">Copy</button></div>
-      <button id="enterBtn" class="primary">Open chat</button>
+      <div class="sectionHead"><button class="backToHome" type="button">← Home</button><span class="clock">--:--</span></div>
+      <div class="logo small">↗</div><h2>Your link is ready</h2><p class="muted">Send it to the person you want. The first browser that accepts it gets the second spot.</p>
+      <div class="shareRow"><input id="shareLink" readonly /><button id="copyBtn">Copy</button></div><button id="enterBtn" class="primary">Open chat</button>
     </section>
 
     <section id="chat" class="chat hidden">
       <header class="topbar">
-        <div class="chatIdentity">
-          <img id="themAvatarTop" class="avatar partnerAvatar" alt="">
-          <div class="partnerText"><strong id="chatPartnerName">Friend</strong><div id="presence" class="presence">Connecting…</div></div>
-        </div>
-        <div class="topActions"><button id="emergencyBtn" class="iconBtn dangerBtn" aria-label="Emergency lock" title="Emergency lock">!</button><button id="profileBtn" class="iconBtn" aria-label="Profile settings">☺</button></div>
-        <span id="roleBadge" class="hidden"></span>
+        <button id="chatBackBtn" class="chatBack" type="button" aria-label="Back to home">←</button>
+        <div class="chatIdentity"><img id="themAvatarTop" class="avatar partnerAvatar" alt=""><div class="partnerText"><strong id="chatPartnerName">Friend</strong><div id="presence" class="presence">Connecting…</div></div></div>
+        <div class="topActions"><span class="chatClock clock">--:--</span><button id="profileBtn" class="iconBtn" aria-label="Profile settings">☺</button><button id="emergencyBtn" class="iconBtn dangerBtn" aria-label="Emergency lock" title="Emergency lock">!</button></div><span id="roleBadge" class="hidden"></span>
       </header>
-
       <div id="messages" class="messages" aria-live="polite"></div>
-
       <div id="emojiTray" class="emojiTray hidden"></div>
-      <form id="form" class="composer">
-        <button type="button" id="emojiBtn" class="toolBtn" aria-label="Emoji">😊</button>
-        <button type="button" id="imageBtn" class="toolBtn" aria-label="Add image">＋</button>
-        <textarea id="input" maxlength="2000" rows="1" placeholder="Message…" autocomplete="off"></textarea>
-        <button type="button" id="voiceBtn" class="toolBtn voice" aria-label="Record voice note">🎙</button>
-        <button class="send" aria-label="Send">➤</button>
-        <input id="imageInput" type="file" accept="image/*" hidden />
-      </form>
+      <form id="form" class="composer"><button type="button" id="emojiBtn" class="toolBtn" aria-label="Emoji">😊</button><button type="button" id="imageBtn" class="toolBtn" aria-label="Add image">＋</button><textarea id="input" maxlength="2000" rows="1" placeholder="Message…" autocomplete="off"></textarea><button type="button" id="voiceBtn" class="toolBtn voice" aria-label="Record voice note">🎙</button><button class="send" aria-label="Send">➤</button><input id="imageInput" type="file" accept="image/*" hidden /></form>
       <div id="recordingBar" class="recordingBar hidden"><span class="recordDot"></span><span id="recordTime">Recording 0:00</span><button id="cancelRecord" type="button">Cancel</button><button id="sendRecord" type="button">Send</button></div>
     </section>
 
-    <section id="error" class="card hidden"><h2>Chat unavailable</h2><p id="errorText" class="muted"></p><a class="buttonLike" href="/">Go home</a></section>
+    <section id="error" class="card hidden"><div class="sectionHead"><button class="backToHome" type="button">← Home</button><span class="clock">--:--</span></div><h2>Chat unavailable</h2><p id="errorText" class="muted"></p></section>
   </main>
 
-  <dialog id="profileDialog" class="profileDialog">
-    <form method="dialog" class="dialogCard">
-      <button class="closeBtn" value="cancel" aria-label="Close">×</button>
-      <h2>Your profile</h2>
-      <button type="button" id="avatarPick" class="avatarPicker"><img id="profileAvatar" class="avatar big" alt=""><span>Change photo</span></button>
-      <input id="avatarInput" type="file" accept="image/*" hidden />
-      <label>Name<input id="displayName" maxlength="24" placeholder="Your name" /></label>
-      <button type="button" id="saveProfile" class="primary full">Save</button>
-    </form>
-  </dialog>
+  <dialog id="profileDialog" class="profileDialog"><form method="dialog" class="dialogCard"><button class="closeBtn" value="cancel" aria-label="Close">×</button><h2 id="profileTitle">Your profile</h2><p id="profileHint" class="muted">Name and photo are optional. You can change them later.</p><button type="button" id="avatarPick" class="avatarPicker"><img id="profileAvatar" class="avatar big" alt=""><span>Choose photo</span></button><input id="avatarInput" type="file" accept="image/*" hidden /><label>Name<input id="displayName" maxlength="24" placeholder="Your name" /></label><div class="dialogThemeRow"><button id="dialogCustomize" type="button" class="secondary full">Change theme / colours</button></div><button type="button" id="saveProfile" class="primary full">Save & continue</button><button id="skipProfile" type="button" class="textBtn full">skip for now</button></form></dialog>
 
   <script src="/socket.io/socket.io.js"></script><script src="/app.js"></script>
 </body>
