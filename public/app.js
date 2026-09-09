@@ -61,7 +61,8 @@ const BUBBLE_COLORS=[
   {id:'pink',value:'#d9578f',label:'Pink'}
 ];
 const customizationKey='justtwo:appearance:v2';
-let appearance={theme:'midnight',bubble:'red',privacy:false};
+let appearance={theme:'midnight',bubble:'red',privacy:false,idleMinutes:5};
+let idleBlurTimer=null;
 try{ appearance={...appearance,...JSON.parse(localStorage.getItem(customizationKey)||'{}')}; }catch{}
 function applyAppearance(){
   document.documentElement.dataset.theme=appearance.theme;
@@ -72,10 +73,14 @@ function applyAppearance(){
   document.querySelectorAll('[data-color-choice]').forEach(el=>el.classList.toggle('selected',el.dataset.colorChoice===appearance.bubble));
   document.body.classList.remove('privacyEnabled');
   ['privacyToggle','dialogPrivacyToggle','setupPrivacyToggle'].forEach(id=>{if($(id))$(id).checked=Boolean(appearance.privacy);});
+  ['idleBlurSelect','dialogIdleBlurSelect','setupIdleBlurSelect'].forEach(id=>{if($(id))$(id).value=String(Number.isFinite(Number(appearance.idleMinutes))?Number(appearance.idleMinutes):5);});
+  updateThemeMascot();
+  resetIdleBlurTimer();
 }
 function themeCard(theme){
   const b=document.createElement('button'); b.type='button'; b.className='themeChoice'; b.dataset.themeChoice=theme.id;
-  b.innerHTML=`<span class="themeSwatch theme-${theme.id}"></span><span><strong>${theme.name}</strong><small>${theme.note}</small></span>`;
+  const character=theme.id==='cursed'?'/assets/gojo-theme.jpg':theme.id==='wisteria'?'/assets/giyu-theme.jpg':'';
+  b.innerHTML=`<span class="themeSwatch theme-${theme.id}">${character?`<img class="themeCharacterThumb" src="${character}" alt="">`:''}</span><span><strong>${theme.name}</strong><small>${theme.note}</small></span>`;
   b.onclick=()=>{appearance.theme=theme.id;applyAppearance();}; return b;
 }
 function colorDot(color){
@@ -90,6 +95,25 @@ function fillAppearanceControls(){
 fillAppearanceControls();
 $('shuffleVibe').onclick=()=>{appearance.theme=THEMES[Math.floor(Math.random()*THEMES.length)].id;appearance.bubble=BUBBLE_COLORS[Math.floor(Math.random()*BUBBLE_COLORS.length)].id;applyAppearance();};
 ['privacyToggle','dialogPrivacyToggle','setupPrivacyToggle'].forEach(id=>$(id)?.addEventListener('change',e=>{appearance.privacy=e.target.checked;applyAppearance();if(e.target.checked)engagePrivacyShield();}));
+['idleBlurSelect','dialogIdleBlurSelect','setupIdleBlurSelect'].forEach(id=>$(id)?.addEventListener('change',e=>{appearance.idleMinutes=Math.max(0,Number(e.target.value)||0);applyAppearance();}));
+
+function updateThemeMascot(){
+  const m=$('themeMascot');if(!m)return;
+  const src=appearance.theme==='cursed'?'/assets/gojo-theme.jpg':appearance.theme==='wisteria'?'/assets/giyu-theme.jpg':'';
+  m.classList.toggle('hidden',!src);
+  if(src){m.src=src;m.className=`themeMascot mascot-${appearance.theme}`;}
+}
+function resetIdleBlurTimer(){
+  clearTimeout(idleBlurTimer);idleBlurTimer=null;
+  const mins=Number(appearance.idleMinutes)||0;
+  if(!mins||document.body.classList.contains('privacyLocked'))return;
+  idleBlurTimer=setTimeout(()=>engagePrivacyShield('idle'),mins*60*1000);
+}
+function noteActivity(){if(!document.body.classList.contains('privacyLocked'))resetIdleBlurTimer();}
+['pointerdown','keydown','touchstart','scroll'].forEach(type=>window.addEventListener(type,noteActivity,{passive:true,capture:true}));
+window.addEventListener('mousemove',noteActivity,{passive:true});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)resetIdleBlurTimer();});
+
 const funBits=[
   {type:'mood',text:'quietly chaotic'}, {type:'mood',text:'plot twist pending'}, {type:'mood',text:'certified yap session'},
   {type:'starter',text:'What is the most random thing you thought about today?'}, {type:'starter',text:'Pick one: teleportation or mind reading?'},
@@ -100,7 +124,7 @@ const funBits=[
   {type:'joke',text:'Why did the message cross the chat? It saw you typing and got nervous.'}, {type:'joke',text:'Breaking news: absolutely nothing happened, but we are discussing it anyway.'}
 ];
 let funIndex=0;
-$('funBtn').onclick=()=>{funIndex=(funIndex+1+Math.floor(Math.random()*(funBits.length-1)))%funBits.length;const bit=funBits[funIndex];$('funType').textContent=bit.type.toUpperCase();$('funResult').textContent=bit.text;};
+if($('funBtn'))$('funBtn').onclick=()=>{funIndex=(funIndex+1+Math.floor(Math.random()*(funBits.length-1)))%funBits.length;const bit=funBits[funIndex];if($('funType'))$('funType').textContent=bit.type.toUpperCase();if($('funResult'))$('funResult').textContent=bit.text;};
 
 function updateClock(){
   const text=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
@@ -253,7 +277,8 @@ async function broadcastActivityStatus(status){
   const jobs=getRooms().map(id=>{const token=localStorage.getItem(storageKey(id));if(!token)return null;return fetch(`/api/rooms/${encodeURIComponent(id)}/activity-status`,{method:'POST',headers:{'content-type':'application/json','x-chat-token':token},body:JSON.stringify({status}),keepalive:true}).catch(()=>null);}).filter(Boolean);
   if(jobs.length)await Promise.allSettled(jobs);
 }
-function engagePrivacyShield(){
+function engagePrivacyShield(reason='manual'){
+  clearTimeout(idleBlurTimer);idleBlurTimer=null;
   $('privacyShield')?.classList.remove('hidden');
   document.body.classList.add('privacyLocked');
   broadcastActivityStatus('blurred');
@@ -262,6 +287,7 @@ function releasePrivacyShield(){
   $('privacyShield')?.classList.add('hidden');
   document.body.classList.remove('privacyLocked');
   broadcastActivityStatus('active');
+  resetIdleBlurTimer();
 }
 let lastShieldTap=0;
 function shieldTap(){

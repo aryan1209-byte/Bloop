@@ -67,8 +67,22 @@
       </section>
 
 
-      <section class="homeWidget privacyWidget">
-        <div><span class="eyebrow">PRIVACY</span><h2>Need the screen hidden fast?</h2><p class="muted">Tap ◉ at the top. Everything blurs instantly. Double-tap the blur to come back.</p></div>
+      <section class="homeWidget privacyWidget idlePrivacyWidget">
+        <div>
+          <span class="eyebrow">PRIVACY</span><h2>Need the screen hidden fast?</h2>
+          <p class="muted">Tap ◉ at the top. Everything blurs instantly. Double-tap the blur to come back.</p>
+          <label class="idleSetting">Auto-blur after inactivity
+            <select id="idleBlurSelect" aria-label="Auto blur after inactivity">
+              <option value="0">Off</option>
+              <option value="1">1 minute</option>
+              <option value="2">2 minutes</option>
+              <option value="5">5 minutes</option>
+              <option value="10">10 minutes</option>
+              <option value="15">15 minutes</option>
+              <option value="30">30 minutes</option>
+            </select>
+          </label>
+        </div>
       </section>
       <section class="homeWidget privacyWidget">
         <div><span class="eyebrow">EMERGENCY</span><h2>Need to close the app immediately?</h2><p class="muted">Tap ! at the top. Everything closes instantly. Enter the password to come back.</p></div>
@@ -96,6 +110,7 @@
       </header>
 
       <div id="messages" class="messages" aria-live="polite"></div>
+      <img id="themeMascot" class="themeMascot hidden" alt="" aria-hidden="true">
       <div id="typingBubble" class="typingBubble hidden" aria-label="Friend is typing"><span></span><span></span><span></span></div>
 
       <form id="form" class="composer">
@@ -125,6 +140,7 @@
       <input id="avatarInput" type="file" accept="image/*" hidden />
       <div class="dialogSection"><span class="dialogLabel">Theme</span><div id="dialogThemeGrid" class="themeGrid compact"></div></div>
       <div class="dialogSection"><span class="dialogLabel">My bubble colour</span><div id="dialogColorChoices" class="colorChoices"></div></div>
+      <div class="dialogSection"><label class="idleSetting">Auto-blur after inactivity<select id="dialogIdleBlurSelect" aria-label="Auto blur after inactivity"><option value="0">Off</option><option value="1">1 minute</option><option value="2">2 minutes</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option></select></label></div>
       <button type="button" id="saveProfile" class="primary full">Save</button>
     </form>
   </dialog>
@@ -137,6 +153,7 @@
       <input id="setupAvatarInput" type="file" accept="image/*" hidden />
       <div class="dialogSection"><span class="dialogLabel">Pick a theme</span><div id="setupThemeGrid" class="themeGrid compact"></div></div>
       <div class="dialogSection"><span class="dialogLabel">Your message colour</span><div id="setupColorChoices" class="colorChoices"></div></div>
+      <div class="dialogSection"><label class="idleSetting">Auto-blur after inactivity<select id="setupIdleBlurSelect" aria-label="Auto blur after inactivity"><option value="0">Off</option><option value="1">1 minute</option><option value="2">2 minutes</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option></select></label></div>
       <button type="button" id="finishSetup" class="primary full">Save & enter chat</button>
       <button type="button" id="skipSetup" class="textBtn full">Skip for now</button>
     </form>
