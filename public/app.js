@@ -199,38 +199,91 @@ $('shuffleVibe').onclick=()=>{appearance.theme=THEMES[Math.floor(Math.random()*T
 ['privacyToggle','dialogPrivacyToggle','setupPrivacyToggle'].forEach(id=>$(id)?.addEventListener('change',e=>{appearance.privacy=e.target.checked;applyAppearance();if(e.target.checked)engagePrivacyShield();}));
 ['idleBlurSelect','dialogIdleBlurSelect','setupIdleBlurSelect'].forEach(id=>$(id)?.addEventListener('change',e=>{appearance.idleMinutes=Math.max(0,Number(e.target.value)||0);applyAppearance();}));
 
+let swRegistration=null;
+async function ensureServiceWorker(){
+  if(!('serviceWorker' in navigator))return null;
+  try{
+    swRegistration=swRegistration||await navigator.serviceWorker.register('/sw.js',{scope:'/'});
+    return swRegistration;
+  }catch{return null;}
+}
+ensureServiceWorker();
+
+function isIos(){return /iphone|ipad|ipod/i.test(navigator.userAgent)||(/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1);}
+function isStandalone(){return matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;}
+function updateNotificationStatus(text){const el=$('notificationStatus');if(el)el.textContent=text||'';}
+
 async function setNotificationsEnabled(enabled){
-  if(!enabled){appearance.notifications=false;applyAppearance();return;}
-  if(!('Notification' in window)){appearance.notifications=false;applyAppearance();alert('Browser notifications are not supported here.');return;}
+  if(!enabled){appearance.notifications=false;applyAppearance();updateNotificationStatus('Notifications off.');return;}
+  if(!('Notification' in window)){appearance.notifications=false;applyAppearance();updateNotificationStatus('System notifications are not supported in this browser.');alert('This browser does not support system notifications.');return;}
+  if(isIos()&&!isStandalone()){
+    appearance.notifications=false;applyAppearance();
+    updateNotificationStatus('On iPhone/iPad, add Bloop to the Home Screen first, then enable notifications from the installed app.');
+    alert('On iPhone/iPad: tap Bookmark / Add to Home Screen, open Bloop from the Home Screen, then turn notifications on.');
+    return;
+  }
+  await ensureServiceWorker();
   let permission=Notification.permission;
   if(permission!=='granted') permission=await Notification.requestPermission();
   appearance.notifications=permission==='granted';applyAppearance();
-  if(!appearance.notifications) alert('Notifications are blocked. You can allow them in Safari settings and try again.');
+  updateNotificationStatus(appearance.notifications?'Notifications are enabled.':'Notifications are blocked. Allow Bloop notifications in your browser/device settings.');
 }
 ['notificationToggle','dialogNotificationToggle','setupNotificationToggle'].forEach(id=>$(id)?.addEventListener('change',e=>setNotificationsEnabled(e.target.checked)));
-['soundToggle','dialogSoundToggle','setupSoundToggle'].forEach(id=>$(id)?.addEventListener('change',e=>{appearance.sounds=e.target.checked;applyAppearance();}));
+['soundToggle','dialogSoundToggle','setupSoundToggle'].forEach(id=>$(id)?.addEventListener('change',async e=>{appearance.sounds=e.target.checked;applyAppearance();if(e.target.checked){await unlockAlertAudio();playTinyTing(true);}}));
 
 let alertAudioContext=null;
-function playTinyTing(){
-  if(appearance.sounds===false)return;
+async function unlockAlertAudio(){
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return false;
+    alertAudioContext=alertAudioContext||new Ctx();
+    if(alertAudioContext.state==='suspended')await alertAudioContext.resume();
+    const gain=alertAudioContext.createGain();gain.gain.value=0;gain.connect(alertAudioContext.destination);
+    const osc=alertAudioContext.createOscillator();osc.connect(gain);osc.start();osc.stop(alertAudioContext.currentTime+.01);
+    return alertAudioContext.state==='running';
+  }catch{return false;}
+}
+document.addEventListener('pointerdown',()=>unlockAlertAudio(),{once:true,capture:true});
+document.addEventListener('touchstart',()=>unlockAlertAudio(),{once:true,capture:true,passive:true});
+
+function playTinyTing(force=false){
+  if(!force&&appearance.sounds===false)return;
   try{
     const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;
     alertAudioContext=alertAudioContext||new Ctx();
-    if(alertAudioContext.state==='suspended')alertAudioContext.resume().catch(()=>{});
+    if(alertAudioContext.state==='suspended'){alertAudioContext.resume().then(()=>playTinyTing(force)).catch(()=>{});return;}
     const now=alertAudioContext.currentTime,osc=alertAudioContext.createOscillator(),gain=alertAudioContext.createGain();
-    osc.type='sine';osc.frequency.setValueAtTime(920,now);osc.frequency.exponentialRampToValueAtTime(720,now+.09);
-    gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(.028,now+.008);gain.gain.exponentialRampToValueAtTime(.0001,now+.11);
-    osc.connect(gain);gain.connect(alertAudioContext.destination);osc.start(now);osc.stop(now+.12);
+    osc.type='sine';osc.frequency.setValueAtTime(980,now);osc.frequency.exponentialRampToValueAtTime(760,now+.12);
+    gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(.055,now+.012);gain.gain.exponentialRampToValueAtTime(.0001,now+.16);
+    osc.connect(gain);gain.connect(alertAudioContext.destination);osc.start(now);osc.stop(now+.17);
   }catch{}
 }
-function notifyIncomingMessage(msg){
+function showGlobalMessageToast(title,body){
+  const el=$('globalMessageToast');if(!el)return;
+  el.innerHTML=`<strong>${escapeHtml(title)}</strong><span>${escapeHtml(body)}</span>`;
+  el.classList.remove('hidden');clearTimeout(showGlobalMessageToast.timer);showGlobalMessageToast.timer=setTimeout(()=>el.classList.add('hidden'),3800);
+}
+async function showSystemNotification(title,body){
+  if(!appearance.notifications||!('Notification' in window)||Notification.permission!=='granted')return false;
+  try{
+    const reg=await ensureServiceWorker();
+    if(reg?.showNotification){await reg.showNotification(title,{body,tag:`bloop-${currentRoom}`,icon:'/assets/bloop-icon.jpg',badge:'/assets/bloop-icon.jpg',data:{url:currentRoom?`/chat/${encodeURIComponent(currentRoom)}`:'/'}});return true;}
+    const n=new Notification(title,{body,tag:`bloop-${currentRoom}`});n.onclick=()=>{window.focus();n.close();};return true;
+  }catch{return false;}
+}
+async function notifyIncomingMessage(msg){
   if(msg?.sender===myRole)return;
   playTinyTing();
-  if(!appearance.notifications||!('Notification' in window)||Notification.permission!=='granted'||!document.hidden)return;
   const other=myRole==='creator'?'guest':'creator';const name=profiles[other]?.displayName||'Friend';
   const body=msg.type==='text'?(msg.body||'New message').slice(0,100):msg.type==='image'?'Sent a photo':msg.type==='audio'?'Sent a voice note':'Sent a message';
-  try{const n=new Notification(name,{body,tag:`justtwo-${currentRoom}`,renotify:true});n.onclick=()=>{window.focus();n.close();};}catch{}
+  if(document.hidden) await showSystemNotification(name,body);
+  else if(appearance.notifications) showGlobalMessageToast(name,body);
 }
+$('testAlertsBtn')?.addEventListener('click',async()=>{
+  await unlockAlertAudio();playTinyTing(true);
+  if(!appearance.notifications){await setNotificationsEnabled(true);}
+  if(appearance.notifications){showGlobalMessageToast('Bloop','Notifications are working.');await showSystemNotification('Bloop','Test notification — alerts are working.');}
+  else showGlobalMessageToast('Bloop','Sound test played. System notifications still need permission.');
+});
 
 function resetIdleBlurTimer(){
   clearTimeout(idleBlurTimer);idleBlurTimer=null;
@@ -379,9 +432,25 @@ $('createBtn').onclick=async()=>{
   const r=await fetch('/api/rooms',{method:'POST'}); const data=await r.json(); if(!r.ok)return fail(data.error||'Could not create chat.');
   currentRoom=data.roomId;authToken=data.creatorToken;myRole='creator';
   localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);
-  $('shareLink').value=`${location.origin}/?room=${encodeURIComponent(currentRoom)}&invite=${encodeURIComponent(data.shareToken)}`; show('share'); history.pushState({view:'share'},'','/');
+  $('shareLink').value=`${location.origin}/?room=${encodeURIComponent(currentRoom)}&invite=${encodeURIComponent(data.shareToken)}`; if($('shareCode'))$('shareCode').value=data.joinCode||''; show('share'); history.pushState({view:'share'},'','/');
 };
 $('copyBtn').onclick=async()=>{await navigator.clipboard.writeText($('shareLink').value);$('copyBtn').textContent='Copied ✓';setTimeout(()=>$('copyBtn').textContent='Copy',1200);};
+$('copyCodeBtn')?.addEventListener('click',async()=>{const code=$('shareCode')?.value||'';if(!code)return;await navigator.clipboard.writeText(code);$('copyCodeBtn').textContent='Copied ✓';setTimeout(()=>$('copyCodeBtn').textContent='Copy code',1200);});
+function formatJoinCode(value){const raw=String(value||'').toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,8);return raw.length>4?`${raw.slice(0,4)}-${raw.slice(4)}`:raw;}
+$('joinCodeInput')?.addEventListener('input',e=>{e.target.value=formatJoinCode(e.target.value);$('joinCodeStatus').textContent='';});
+async function joinByCode(){
+  const input=$('joinCodeInput');const status=$('joinCodeStatus');const code=formatJoinCode(input?.value);
+  if(code.replace('-','').length!==8){if(status)status.textContent='Enter the full 8-character code.';return;}
+  if(status)status.textContent='Joining…';
+  try{
+    const r=await fetch('/api/join-code',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code})});const data=await r.json();
+    if(!r.ok){if(status)status.textContent=data.error||'Could not join that chat.';return;}
+    currentRoom=data.roomId;authToken=data.authToken;myRole=data.role;
+    localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);rememberRoom(currentRoom);
+    if(status)status.textContent='Joined ✓';openChat(true);
+  }catch{if(status)status.textContent='Could not connect. Try again.';}
+}
+$('joinCodeBtn')?.addEventListener('click',joinByCode);$('joinCodeInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();joinByCode();}});
 $('enterBtn').onclick=()=>{
   rememberRoom(currentRoom);
   openChat(true);

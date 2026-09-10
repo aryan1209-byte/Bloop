@@ -59,6 +59,13 @@
 
       <div class="landingActions"><button id="createBtn" class="primary">Make a new chat</button></div>
 
+      <section class="homeWidget joinCodeWidget">
+        <div class="widgetHeading"><div><span class="eyebrow">JOIN</span><h2>Join with a code</h2></div></div>
+        <p class="muted">Enter the 8-character code the other person sent you.</p>
+        <div class="joinCodeRow"><input id="joinCodeInput" inputmode="text" autocomplete="off" maxlength="9" placeholder="ABCD-2345" aria-label="Bloop chat code"><button id="joinCodeBtn" class="secondary" type="button">Join</button></div>
+        <small id="joinCodeStatus" class="muted"></small>
+      </section>
+
       <section id="contactsWidget" class="homeWidget contactsWidget hidden">
         <div class="widgetHeading"><div><span class="eyebrow">YOUR CHATS</span><h2>People</h2></div><small id="contactsCount" class="muted"></small></div>
         <div id="contactsList" class="contactsList"></div><div id="homeNotice" class="homeNotice hidden" aria-live="polite"></div>
@@ -100,6 +107,8 @@
   <div class="alertSettings">
     <label class="switchRow"><span>Message notifications</span><input id="notificationToggle" type="checkbox"><i></i></label>
     <label class="switchRow"><span>Tiny message sound</span><input id="soundToggle" type="checkbox" checked><i></i></label>
+    <button id="testAlertsBtn" class="secondary alertTestBtn" type="button">Test notification + sound</button>
+    <small id="notificationStatus" class="muted"></small>
   </div>
 </section>
 
@@ -127,7 +136,9 @@
       <div class="logo small">↗</div>
       <h2>Invite ready.</h2>
       <p class="muted">Send this link to one person. They’ll still have to accept before they join.</p>
-      <div class="shareRow"><input id="shareLink" readonly /><button id="copyBtn">Copy</button></div>
+      <div class="shareRow"><input id="shareLink" readonly /><button id="copyBtn">Copy link</button></div>
+      <label class="shareCodeLabel">Chat code</label>
+      <div class="shareRow"><input id="shareCode" readonly placeholder="ABCD-2345" /><button id="copyCodeBtn" type="button">Copy code</button></div>
       <button id="enterBtn" class="primary">Go to my chat</button>
     </section>
 
@@ -211,5 +222,6 @@
   </div>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/app.js"></script>
+  <div id="globalMessageToast" class="globalMessageToast hidden" role="status" aria-live="polite"></div>
 </body>
 </html>

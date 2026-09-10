@@ -33,6 +33,7 @@ db.exec(`
 CREATE TABLE IF NOT EXISTS rooms (
   id TEXT PRIMARY KEY,
   share_token_hash TEXT NOT NULL UNIQUE,
+  join_code_hash TEXT UNIQUE,
   creator_token_hash TEXT NOT NULL,
   guest_token_hash TEXT,
   invite_status TEXT NOT NULL DEFAULT 'pending',
@@ -89,6 +90,7 @@ for (const [name, sql] of [
 
 const roomColumns = db.prepare('PRAGMA table_info(rooms)').all().map(c => c.name);
 if (!roomColumns.includes('invite_status')) db.exec(`ALTER TABLE rooms ADD COLUMN invite_status TEXT NOT NULL DEFAULT 'pending'`);
+if (!roomColumns.includes('join_code_hash')) db.exec(`ALTER TABLE rooms ADD COLUMN join_code_hash TEXT`);
 if (!roomColumns.includes('invite_status_at')) db.exec(`ALTER TABLE rooms ADD COLUMN invite_status_at INTEGER`);
 
 const profileColumns = db.prepare('PRAGMA table_info(profiles)').all().map(c => c.name);
@@ -128,6 +130,13 @@ setInterval(makeBackup, 30 * 60 * 1000).unref();
 
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 const token = (bytes = 24) => crypto.randomBytes(bytes).toString('base64url');
+const JOIN_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function makeJoinCode(){
+  let raw='';
+  for(let i=0;i<8;i++) raw += JOIN_ALPHABET[crypto.randomInt(0, JOIN_ALPHABET.length)];
+  return `${raw.slice(0,4)}-${raw.slice(4)}`;
+}
+const normalizeJoinCode = value => String(value||'').toUpperCase().replace(/[^A-Z2-9]/g,'');
 const cleanName = value => String(value || '').trim().slice(0, 24);
 const cleanUsername = value => String(value || '').trim().replace(/^@+/,'').replace(/[^a-zA-Z0-9_.]/g,'').slice(0,20);
 
@@ -241,10 +250,30 @@ app.post('/api/rooms', (_req, res) => {
   const roomId = token(12);
   const shareToken = token(24);
   const creatorToken = token(32);
-  db.prepare('INSERT INTO rooms (id, share_token_hash, creator_token_hash, created_at) VALUES (?, ?, ?, ?)')
-    .run(roomId, sha256(shareToken), sha256(creatorToken), Date.now());
+  let joinCode;
+  for(let tries=0;tries<12;tries++){
+    const candidate=makeJoinCode();
+    if(!db.prepare('SELECT 1 FROM rooms WHERE join_code_hash = ?').get(sha256(normalizeJoinCode(candidate)))){joinCode=candidate;break;}
+  }
+  if(!joinCode) return res.status(503).json({error:'Could not create a join code. Try again.'});
+  db.prepare('INSERT INTO rooms (id, share_token_hash, join_code_hash, creator_token_hash, created_at) VALUES (?, ?, ?, ?, ?)')
+    .run(roomId, sha256(shareToken), sha256(normalizeJoinCode(joinCode)), sha256(creatorToken), Date.now());
   db.prepare(`INSERT OR IGNORE INTO profiles (room_id, role, display_name) VALUES (?, 'creator', 'You')`).run(roomId);
-  res.json({ roomId, shareToken, creatorToken });
+  res.json({ roomId, shareToken, creatorToken, joinCode });
+});
+
+app.post('/api/join-code', (req, res) => {
+  const normalized=normalizeJoinCode(req.body?.code);
+  if(normalized.length!==8) return res.status(400).json({error:'Enter an 8-character Bloop code.'});
+  const room=db.prepare('SELECT * FROM rooms WHERE join_code_hash = ?').get(sha256(normalized));
+  if(!room) return res.status(404).json({error:'That Bloop code was not found.'});
+  if(room.invite_status==='declined') return res.status(410).json({error:'This invite was declined.'});
+  if(room.guest_token_hash) return res.status(403).json({error:'This chat already has its two people.'});
+  const guestToken=token(32);
+  const result=db.prepare(`UPDATE rooms SET guest_token_hash = ?, invite_status = 'accepted', invite_status_at = ? WHERE id = ? AND guest_token_hash IS NULL AND invite_status != 'declined'`).run(sha256(guestToken),Date.now(),room.id);
+  if(!result.changes) return res.status(403).json({error:'This chat already has its two people.'});
+  db.prepare(`INSERT OR IGNORE INTO profiles (room_id, role, display_name) VALUES (?, 'guest', 'Friend')`).run(room.id);
+  res.json({roomId:room.id,role:'guest',authToken:guestToken});
 });
 
 app.post('/api/rooms/:roomId/join', (req, res) => {
