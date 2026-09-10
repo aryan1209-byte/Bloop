@@ -228,17 +228,25 @@ async function goHome(replace=true){
   socket?.disconnect(); setTyping(false); show('landing'); showInviteCard(); await setupContacts({notify:false}); startHomeRefresh();
   if(replace) history.replaceState({view:'home'},'',pendingInvite?`/?room=${encodeURIComponent(inviteRoomId)}&invite=${encodeURIComponent(inviteToken)}`:'/');
 }
-$('shareBackBtn').onclick=()=>goHome(); $('errorHomeBtn').onclick=()=>goHome(); $('chatBackBtn').onclick=()=>history.back();
+$('shareBackBtn').onclick=()=>{
+  currentRoom = null;
+  authToken = null;
+  myRole = null;
+  goHome();
+}; $('errorHomeBtn').onclick=()=>goHome(); $('chatBackBtn').onclick=()=>history.back();
 
 $('createBtn').onclick=async()=>{
   stopHomeRefresh();
   const r=await fetch('/api/rooms',{method:'POST'}); const data=await r.json(); if(!r.ok)return fail(data.error||'Could not create chat.');
   currentRoom=data.roomId;authToken=data.creatorToken;myRole='creator';
-  localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);rememberRoom(currentRoom);
+  localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);
   $('shareLink').value=`${location.origin}/?room=${encodeURIComponent(currentRoom)}&invite=${encodeURIComponent(data.shareToken)}`; show('share'); history.pushState({view:'share'},'','/');
 };
 $('copyBtn').onclick=async()=>{await navigator.clipboard.writeText($('shareLink').value);$('copyBtn').textContent='Copied ✓';setTimeout(()=>$('copyBtn').textContent='Copy',1200);};
-$('enterBtn').onclick=()=>openChat(true);
+$('enterBtn').onclick=()=>{
+  rememberRoom(currentRoom);
+  openChat(true);
+};
 $('acceptInviteBtn').onclick=async()=>{
   if(!pendingInvite)return;
   const existingToken=localStorage.getItem(storageKey(inviteRoomId));
