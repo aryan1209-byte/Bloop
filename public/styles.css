@@ -491,3 +491,82 @@ html,body{background:#06101f!important;background-image:none!important}
 }
 .deletedTorch[aria-pressed="true"]{transform:scale(.94)!important;box-shadow:0 0 0 3px rgba(241,189,85,.15),0 8px 24px rgba(0,0,0,.3)!important}
 @media(max-width:650px){.deletedTorch{right:7px!important;width:42px!important;height:42px!important;border-radius:14px!important;font-size:20px!important}}
+
+/* v19: reference-water page background, quicker presence polish, round text surfaces, light themes */
+.oceanBackdrop,.oceanBackdropV12,.oceanBackdropV13{display:none!important}
+body::before{display:none!important}
+html{
+  background:#4d87d3!important;
+}
+body{
+  background-color:#4d87d3!important;
+  background-image:linear-gradient(rgba(4,18,45,.24),rgba(4,18,45,.24)),url('/assets/water-bg.jpg')!important;
+  background-size:cover!important;
+  background-position:center center!important;
+  background-repeat:no-repeat!important;
+  background-attachment:fixed!important;
+}
+.shell{background:transparent!important}
+
+/* Softer, rounder text/message surfaces. */
+.msg{
+  border-radius:18px!important;
+  padding:10px 13px!important;
+}
+.mine .msg{border-radius:18px 18px 7px 18px!important}
+.theirs .msg{border-radius:18px 18px 18px 7px!important}
+.composer textarea,#input,
+.shareRow input,.dialogCard input,.emojiHeader input,.gifSendRow input{
+  border-radius:20px!important;
+}
+#input{
+  min-height:42px!important;
+  padding:10px 16px!important;
+}
+
+/* Two genuinely light options while keeping the water artwork behind the app. */
+.theme-pearl{background:linear-gradient(135deg,#ffffff,#f1f3f7,#dfe4ec)!important}
+.theme-cloud{background:linear-gradient(135deg,#ffffff,#edf6ff,#d7e7f5)!important}
+html[data-theme="pearl"]{
+  --bg:#eef1f5;--panel:rgba(255,255,255,.88);--ink:#18202b;--muted:#667181;
+  --line:rgba(76,91,112,.20);--soft:rgba(244,247,251,.92);--their-bubble:rgba(255,255,255,.94);
+  --wallpaper:rgba(242,246,251,.78);--accent:#6680a8;--shadow:0 18px 55px rgba(24,38,59,.18)
+}
+html[data-theme="cloud"]{
+  --bg:#edf5fb;--panel:rgba(250,253,255,.90);--ink:#152332;--muted:#617487;
+  --line:rgba(72,105,132,.20);--soft:rgba(239,247,253,.94);--their-bubble:rgba(255,255,255,.96);
+  --wallpaper:rgba(235,245,252,.80);--accent:#63a4d0;--shadow:0 18px 55px rgba(38,73,102,.18)
+}
+html[data-theme="pearl"] .card,html[data-theme="pearl"] .homeWidget,html[data-theme="pearl"] .chat,
+html[data-theme="pearl"] .profileDialog .dialogCard,html[data-theme="pearl"] .shareView,html[data-theme="pearl"] .inviteCard,
+html[data-theme="cloud"] .card,html[data-theme="cloud"] .homeWidget,html[data-theme="cloud"] .chat,
+html[data-theme="cloud"] .profileDialog .dialogCard,html[data-theme="cloud"] .shareView,html[data-theme="cloud"] .inviteCard{
+  background:linear-gradient(145deg,rgba(255,255,255,.91),rgba(240,246,252,.82))!important;
+  border-color:rgba(71,91,118,.20)!important;
+  color:var(--ink)!important;
+}
+html[data-theme="pearl"] .contactCard,html[data-theme="pearl"] .themeChoice,
+html[data-theme="cloud"] .contactCard,html[data-theme="cloud"] .themeChoice{
+  background:rgba(255,255,255,.70)!important;color:var(--ink)!important
+}
+html[data-theme="pearl"] .topbar,html[data-theme="pearl"] .composer,
+html[data-theme="cloud"] .topbar,html[data-theme="cloud"] .composer{
+  background:rgba(248,252,255,.82)!important;color:var(--ink)!important
+}
+html[data-theme="pearl"] .messages,html[data-theme="cloud"] .messages{
+  background:rgba(244,248,252,.78)!important;color:var(--ink)!important
+}
+html[data-theme="pearl"] .theirs .msg,html[data-theme="cloud"] .theirs .msg{
+  color:var(--ink)!important;background:rgba(255,255,255,.94)!important;border-color:rgba(60,80,105,.13)!important
+}
+html[data-theme="pearl"] .secondary,html[data-theme="pearl"] .tinyBtn,html[data-theme="pearl"] .toolBtn,html[data-theme="pearl"] .iconBtn,
+html[data-theme="cloud"] .secondary,html[data-theme="cloud"] .tinyBtn,html[data-theme="cloud"] .toolBtn,html[data-theme="cloud"] .iconBtn{
+  color:var(--ink)!important;background:rgba(255,255,255,.74)!important;border-color:rgba(70,90,115,.18)!important
+}
+html[data-theme="pearl"] .themeMascot,html[data-theme="cloud"] .themeMascot{opacity:.10!important}
+
+@media(max-width:650px){
+  body{background-attachment:scroll!important;background-position:center center!important}
+  .msg{border-radius:17px!important}
+  #input{border-radius:19px!important}
+}

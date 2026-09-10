@@ -185,7 +185,7 @@ function presencePayload(roomId) {
   const lastSeen = { creator: null, guest: null };
   const activity = { creator: null, guest: null };
   const statusAt = { creator: null, guest: null };
-  const recentCutoff = Date.now() - 16000;
+  const recentCutoff = Date.now() - 5500;
   for (const row of rows) {
     lastSeen[row.role] = row.lastSeen || null; activity[row.role] = row.activityStatus || null; statusAt[row.role] = row.statusAt || null;
     if (row.lastSeen && row.lastSeen >= recentCutoff && row.activityStatus !== 'emergency') onlineRoles.add(row.role);
@@ -307,7 +307,7 @@ app.post('/api/rooms/:roomId/heartbeat', (req, res) => {
   db.prepare('UPDATE profiles SET last_seen = ? WHERE room_id = ? AND role = ?').run(now, roomId, auth.role);
   const key = `${roomId}:${auth.role}`;
   clearTimeout(heartbeatExpiryTimers.get(key));
-  heartbeatExpiryTimers.set(key, setTimeout(() => { heartbeatExpiryTimers.delete(key); emitPresence(roomId); }, 17000));
+  heartbeatExpiryTimers.set(key, setTimeout(() => { heartbeatExpiryTimers.delete(key); emitPresence(roomId); }, 6000));
   emitPresence(roomId);
   res.json({ ok: true, at: now });
 });

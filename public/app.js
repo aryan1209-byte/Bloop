@@ -129,7 +129,9 @@ const THEMES = [
   {id:'cyber',name:'Cyber Alley',note:'electric blue shadows'},
   {id:'aurora',name:'Aurora',note:'green-blue night'},
   {id:'storm',name:'Storm',note:'charcoal + lightning'},
-  {id:'mono',name:'Monochrome',note:'ink black + silver'}
+  {id:'mono',name:'Monochrome',note:'ink black + silver'},
+  {id:'pearl',name:'Pearl',note:'soft white glass'},
+  {id:'cloud',name:'Cloud',note:'cool white + pale blue'}
 ];
 const BUBBLE_COLORS=[
   {id:'red',value:'#ef4b4b',label:'Red'},
@@ -152,7 +154,9 @@ const THEME_STICKERS={
   cyber:'⚡',
   aurora:'✨',
   storm:'⛈️',
-  mono:'◐'
+  mono:'◐',
+  pearl:'☾',
+  cloud:'☁️'
 };
 function updateThemeMascot(){
   const sticker=$('themeMascot');
@@ -315,7 +319,7 @@ async function setupContacts({notify=false}={}){
   if(homeUnreadReady&&notify&&totalUnread>lastHomeUnreadTotal)showHomeNotice(`${totalUnread-lastHomeUnreadTotal} new message${totalUnread-lastHomeUnreadTotal===1?'':'s'} from ${newestName}`);
   lastHomeUnreadTotal=totalUnread;homeUnreadReady=true;homeRefreshBusy=false;
 }
-function startHomeRefresh(){clearInterval(homeRefreshTimer);homeRefreshTimer=setInterval(()=>{if(!$('landing').classList.contains('hidden'))setupContacts({notify:true});},5000);}
+function startHomeRefresh(){clearInterval(homeRefreshTimer);homeRefreshTimer=setInterval(()=>{if(!$('landing').classList.contains('hidden'))setupContacts({notify:true});},2000);}
 function stopHomeRefresh(){clearInterval(homeRefreshTimer);homeRefreshTimer=null;}
 
 function showInviteCard(){ $('inviteCard').classList.toggle('hidden',!pendingInvite); }
