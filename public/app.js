@@ -3,30 +3,56 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':
 const views = ['landing','share','chat','error'];
 const show = id => { views.forEach(v => $(v).classList.toggle('hidden', v !== id)); $('appChrome')?.classList.toggle('hidden', id === 'chat'); };
 
-// v12: curved SVG ocean backdrop with visible foam + spray
+// v13: full-screen flowing-water backdrop inspired by the supplied reference
 function ensureOceanBackdrop(){
   document.querySelector('.oceanBackdrop')?.remove();
   const ocean=document.createElement('div');
-  ocean.className='oceanBackdrop oceanBackdropV12';
+  ocean.className='oceanBackdrop oceanBackdropV13';
   ocean.setAttribute('aria-hidden','true');
   ocean.innerHTML=`
-    <svg class="oceanSvg oceanFar" viewBox="0 0 1600 300" preserveAspectRatio="none">
-      <path class="waterFar" d="M-100 210 C130 160 260 235 455 184 C650 132 770 222 970 174 C1175 125 1325 210 1710 145 L1710 320 L-100 320 Z"/>
+    <svg class="waterMap" viewBox="0 0 1600 1100" preserveAspectRatio="xMidYMid slice">
+      <rect class="waterBase" width="1600" height="1100"/>
+
+      <g class="waterIslands islandA">
+        <path class="waterPlate plate1" d="M-120 40 C90 -40 265 -15 345 90 C427 196 315 270 225 320 C115 383 66 490 -46 454 C-137 425 -183 315 -130 222 C-86 145 -48 95 -120 40Z"/>
+        <path class="waterContour contour1" d="M-120 40 C90 -40 265 -15 345 90 C427 196 315 270 225 320 C115 383 66 490 -46 454"/>
+      </g>
+
+      <g class="waterIslands islandB">
+        <path class="waterPlate plate2" d="M430 -95 C635 -42 782 15 779 132 C775 259 616 252 553 330 C493 405 527 504 409 524 C287 546 219 432 259 335 C306 222 399 180 376 89 C356 16 343 -73 430 -95Z"/>
+        <path class="waterContour contour2" d="M430 -95 C635 -42 782 15 779 132 C775 259 616 252 553 330 C493 405 527 504 409 524"/>
+      </g>
+
+      <g class="waterIslands islandC">
+        <path class="waterPlate plate3" d="M903 -96 C1101 -77 1324 -5 1390 116 C1444 216 1327 276 1195 253 C1077 231 1019 320 944 401 C861 490 731 458 720 345 C710 243 828 189 822 102 C817 24 803 -84 903 -96Z"/>
+        <path class="waterContour contour3" d="M903 -96 C1101 -77 1324 -5 1390 116 C1444 216 1327 276 1195 253 C1077 231 1019 320 944 401"/>
+      </g>
+
+      <g class="waterIslands islandD">
+        <path class="waterPlate plate4" d="M1450 82 C1597 70 1725 168 1708 301 C1695 411 1572 426 1517 511 C1457 604 1511 710 1389 756 C1265 803 1162 711 1180 596 C1197 488 1322 462 1318 359 C1315 267 1337 91 1450 82Z"/>
+        <path class="waterContour contour4" d="M1450 82 C1597 70 1725 168 1708 301 C1695 411 1572 426 1517 511 C1457 604 1511 710 1389 756"/>
+      </g>
+
+      <g class="waterIslands islandE">
+        <path class="waterPlate plate5" d="M-120 586 C61 510 221 547 293 670 C351 770 288 836 206 891 C117 951 80 1070 -35 1121 L-120 1121Z"/>
+        <path class="waterContour contour5" d="M-120 586 C61 510 221 547 293 670 C351 770 288 836 206 891 C117 951 80 1070 -35 1121"/>
+      </g>
+
+      <g class="waterIslands islandF">
+        <path class="waterPlate plate6" d="M467 627 C617 561 794 599 855 715 C917 832 842 900 764 968 C703 1022 727 1116 619 1150 L365 1150 C313 1053 347 963 413 905 C496 832 390 662 467 627Z"/>
+        <path class="waterContour contour6" d="M467 627 C617 561 794 599 855 715 C917 832 842 900 764 968 C703 1022 727 1116 619 1150"/>
+      </g>
+
+      <g class="waterIslands islandG">
+        <path class="waterPlate plate7" d="M1039 560 C1196 518 1357 600 1366 728 C1375 861 1240 888 1192 969 C1158 1028 1184 1093 1120 1150 L861 1150 C810 1052 855 959 929 897 C1014 827 929 590 1039 560Z"/>
+        <path class="waterContour contour7" d="M1039 560 C1196 518 1357 600 1366 728 C1375 861 1240 888 1192 969 C1158 1028 1184 1093 1120 1150"/>
+      </g>
+
+      <g class="waterDepth">
+        <path d="M250 430 C430 338 595 419 713 475 C845 538 1019 482 1144 418 C1248 365 1377 387 1485 462 C1576 525 1645 620 1654 735 L1654 1115 L-40 1115 L-40 908 C93 877 209 835 277 761 C356 676 180 529 250 430Z"/>
+      </g>
     </svg>
-    <svg class="oceanSvg oceanMid" viewBox="0 0 1600 300" preserveAspectRatio="none">
-      <path class="waterMid" d="M-120 226 C75 168 220 252 395 194 C570 136 725 245 900 184 C1070 126 1240 239 1398 176 C1515 130 1618 147 1720 168 L1720 320 L-120 320 Z"/>
-      <path class="foamLine foamMid" d="M-120 226 C75 168 220 252 395 194 C570 136 725 245 900 184 C1070 126 1240 239 1398 176 C1515 130 1618 147 1720 168"/>
-    </svg>
-    <svg class="oceanSvg oceanNear" viewBox="0 0 1600 300" preserveAspectRatio="none">
-      <path class="waterNear" d="M-160 252 C35 185 185 276 350 212 C535 142 665 270 842 198 C1025 125 1160 260 1335 194 C1500 130 1600 190 1760 150 L1760 330 L-160 330 Z"/>
-      <path class="foamLine foamNear" d="M-160 252 C35 185 185 276 350 212 C535 142 665 270 842 198 C1025 125 1160 260 1335 194 C1500 130 1600 190 1760 150"/>
-    </svg>
-    <div class="oceanSpray">
-      <i style="--x:9%;--y:48%;--d:.1s"></i><i style="--x:12%;--y:42%;--d:.45s"></i><i style="--x:24%;--y:57%;--d:.8s"></i>
-      <i style="--x:38%;--y:39%;--d:.25s"></i><i style="--x:41%;--y:34%;--d:.65s"></i><i style="--x:55%;--y:52%;--d:.95s"></i>
-      <i style="--x:67%;--y:36%;--d:.35s"></i><i style="--x:70%;--y:31%;--d:.75s"></i><i style="--x:83%;--y:49%;--d:.15s"></i>
-      <i style="--x:91%;--y:34%;--d:.55s"></i>
-    </div>`;
+  `;
   document.body.prepend(ocean);
 }
 ensureOceanBackdrop();

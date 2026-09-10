@@ -302,3 +302,57 @@ html[data-theme="mono"]{--ocean-far:rgba(70,75,82,.22);--ocean-mid:rgba(95,101,1
 
 @media(max-width:650px){.oceanBackdropV12{height:30vh;min-height:190px}.foamNear{stroke-width:3.4}}
 @media(prefers-reduced-motion:reduce){.oceanFar,.oceanMid,.oceanNear,.foamLine,.oceanSpray i{animation:none!important}.oceanSpray{display:none}}
+
+/* v13: full-screen abstract flowing-water backdrop */
+:root{
+  --sea-base:#3f7dce;
+  --sea-deep:#2f66b6;
+  --sea-plate-a:#8794de;
+  --sea-plate-b:#748ad6;
+  --sea-plate-c:#9a9ee0;
+  --sea-outline:rgba(255,255,255,.92);
+  --sea-depth:rgba(33,82,157,.38);
+}
+.oceanBackdropV12{display:none!important}
+.oceanBackdropV13{
+  position:fixed;
+  inset:0;
+  z-index:-4;
+  pointer-events:none;
+  overflow:hidden;
+  opacity:.72;
+  background:var(--sea-base);
+}
+.waterMap{position:absolute;inset:-3%;width:106%;height:106%;filter:saturate(.92) brightness(.72);transform:scale(1.02)}
+.waterBase{fill:var(--sea-base)}
+.waterDepth path{fill:var(--sea-depth)}
+.waterPlate{stroke:var(--sea-outline);stroke-width:5;vector-effect:non-scaling-stroke;filter:drop-shadow(0 12px 0 rgba(25,60,128,.24)) drop-shadow(0 24px 32px rgba(4,18,45,.16))}
+.plate1,.plate4,.plate6{fill:var(--sea-plate-a)}
+.plate2,.plate5,.plate7{fill:var(--sea-plate-b)}
+.plate3{fill:var(--sea-plate-c)}
+.waterContour{fill:none;stroke:rgba(255,255,255,.96);stroke-width:3.5;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round;opacity:.9}
+.waterIslands{transform-origin:center;will-change:transform}
+.islandA,.islandD,.islandF{animation:waterDriftA 16s ease-in-out infinite alternate}
+.islandB,.islandE,.islandG{animation:waterDriftB 19s ease-in-out infinite alternate}
+.islandC{animation:waterDriftC 22s ease-in-out infinite alternate}
+@keyframes waterDriftA{from{transform:translate3d(-8px,3px,0)}to{transform:translate3d(12px,-8px,0)}}
+@keyframes waterDriftB{from{transform:translate3d(8px,-4px,0)}to{transform:translate3d(-10px,10px,0)}}
+@keyframes waterDriftC{from{transform:translate3d(-4px,-8px,0)}to{transform:translate3d(9px,7px,0)}}
+
+/* Keep the reference palette dominant; themes only nudge it slightly. */
+html[data-theme="midnight"]{--sea-base:#3f7dce;--sea-deep:#2f66b6;--sea-plate-a:#8794de;--sea-plate-b:#748ad6;--sea-plate-c:#9a9ee0}
+html[data-theme="cursed"]{--sea-base:#4678cc;--sea-deep:#315fb0;--sea-plate-a:#8f8bdc;--sea-plate-b:#7d82d4;--sea-plate-c:#9c96df}
+html[data-theme="wisteria"]{--sea-base:#377fc4;--sea-deep:#2869aa;--sea-plate-a:#7e99d7;--sea-plate-b:#6f90cf;--sea-plate-c:#8fa6dc}
+html[data-theme="tokyo"]{--sea-base:#4278c8;--sea-deep:#2e63ad;--sea-plate-a:#8d91dc;--sea-plate-b:#7187d3;--sea-plate-c:#a097dd}
+html[data-theme="sakura"]{--sea-base:#4779c8;--sea-deep:#3463ad;--sea-plate-a:#958fda;--sea-plate-b:#7f86d1;--sea-plate-c:#a59add}
+html[data-theme="cyber"]{--sea-base:#357fc7;--sea-deep:#2468af;--sea-plate-a:#7d97da;--sea-plate-b:#678cd1;--sea-plate-c:#8da4df}
+html[data-theme="aurora"]{--sea-base:#3a82c3;--sea-deep:#2d6da8;--sea-plate-a:#7f9bd3;--sea-plate-b:#7090cc;--sea-plate-c:#91a8d8}
+html[data-theme="storm"]{--sea-base:#4776b7;--sea-deep:#355e96;--sea-plate-a:#8491c8;--sea-plate-b:#7485bb;--sea-plate-c:#969ecb}
+html[data-theme="mono"]{--sea-base:#5276a7;--sea-deep:#3f608b;--sea-plate-a:#8995bb;--sea-plate-b:#7f8dac;--sea-plate-c:#9ca5c4}
+
+/* Let the water show through the glass without overpowering content. */
+body::before{background:linear-gradient(180deg,rgba(5,10,22,.54),rgba(7,13,25,.68))!important}
+.card,.homeWidget,.chat,.profileDialog .dialogCard,.shareView,.inviteCard{backdrop-filter:blur(24px) saturate(1.15)!important;-webkit-backdrop-filter:blur(24px) saturate(1.15)!important}
+
+@media(max-width:650px){.waterMap{inset:-8%;width:116%;height:116%}}
+@media(prefers-reduced-motion:reduce){.waterIslands{animation:none!important}}
