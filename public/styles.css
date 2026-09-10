@@ -303,103 +303,30 @@ html[data-theme="mono"]{--ocean-far:rgba(70,75,82,.22);--ocean-mid:rgba(95,101,1
 @media(max-width:650px){.oceanBackdropV12{height:30vh;min-height:190px}.foamNear{stroke-width:3.4}}
 @media(prefers-reduced-motion:reduce){.oceanFar,.oceanMid,.oceanNear,.foamLine,.oceanSpray i{animation:none!important}.oceanSpray{display:none}}
 
-/* v14: dark liquid-water background — same blue/periwinkle look, blanket-friendly */
-:root{
-  --sea-base:#07162d;
-  --sea-deep:#0a2447;
-  --sea-plate-a:#23366f;
-  --sea-plate-b:#1a3d78;
-  --sea-plate-c:#313f82;
-  --sea-outline:rgba(173,195,255,.48);
-  --sea-depth:rgba(8,30,64,.66);
-  --sea-glint:rgba(210,224,255,.26);
-}
-.oceanBackdropV12{display:none!important}
-.oceanBackdropV13{
-  position:fixed;
-  inset:0;
-  z-index:-4;
-  pointer-events:none;
-  overflow:hidden;
-  opacity:1;
-  background:
-    radial-gradient(circle at 72% 18%,rgba(61,82,174,.10),transparent 32%),
-    radial-gradient(circle at 18% 72%,rgba(34,93,158,.12),transparent 34%),
-    var(--sea-base);
-}
-.waterMap{
-  position:absolute;
-  inset:-4%;
-  width:108%;
-  height:108%;
-  filter:saturate(.86) brightness(.54) contrast(1.12);
-  transform:scale(1.025);
-  animation:waterMapBreathe 13s ease-in-out infinite alternate;
-}
-.waterBase{fill:var(--sea-base)}
-.waterDepth path{fill:var(--sea-depth)}
-.waterPlate{
-  stroke:var(--sea-outline);
-  stroke-width:4;
-  vector-effect:non-scaling-stroke;
-  filter:drop-shadow(0 10px 0 rgba(4,20,50,.25)) drop-shadow(0 20px 28px rgba(1,9,25,.28));
-}
-.plate1,.plate4,.plate6{fill:var(--sea-plate-a)}
-.plate2,.plate5,.plate7{fill:var(--sea-plate-b)}
-.plate3{fill:var(--sea-plate-c)}
-.waterContour{
-  fill:none;
-  stroke:var(--sea-glint);
-  stroke-width:2.6;
-  vector-effect:non-scaling-stroke;
-  stroke-linecap:round;
-  stroke-linejoin:round;
-  opacity:.78;
-  filter:drop-shadow(0 0 7px rgba(116,159,255,.18));
-  stroke-dasharray:18 5 46 4;
-  animation:contourFlow 10s linear infinite;
-}
-.waterIslands{transform-origin:center;will-change:transform}
-.islandA,.islandD,.islandF{animation:waterDriftA 17s ease-in-out infinite alternate}
-.islandB,.islandE,.islandG{animation:waterDriftB 21s ease-in-out infinite alternate}
-.islandC{animation:waterDriftC 24s ease-in-out infinite alternate}
-@keyframes waterDriftA{from{transform:translate3d(-10px,5px,0) rotate(-.15deg)}to{transform:translate3d(14px,-9px,0) rotate(.15deg)}}
-@keyframes waterDriftB{from{transform:translate3d(10px,-5px,0) rotate(.12deg)}to{transform:translate3d(-12px,11px,0) rotate(-.12deg)}}
-@keyframes waterDriftC{from{transform:translate3d(-5px,-9px,0)}to{transform:translate3d(11px,8px,0)}}
-@keyframes waterMapBreathe{from{transform:scale(1.025) translate3d(-.25%,0,0)}to{transform:scale(1.045) translate3d(.25%,-.25%,0)}}
-@keyframes contourFlow{to{stroke-dashoffset:-73}}
-
-/* Tiny theme tint only — the dark ocean remains visually the same. */
-html[data-theme="midnight"]{--sea-base:#07162d;--sea-plate-a:#23366f;--sea-plate-b:#1a3d78;--sea-plate-c:#313f82}
-html[data-theme="cursed"]{--sea-base:#09152e;--sea-plate-a:#29346f;--sea-plate-b:#213976;--sea-plate-c:#373d80}
-html[data-theme="wisteria"]{--sea-base:#061a31;--sea-plate-a:#203a70;--sea-plate-b:#174278;--sea-plate-c:#2b4780}
-html[data-theme="tokyo"]{--sea-base:#08172f;--sea-plate-a:#26366f;--sea-plate-b:#193d78;--sea-plate-c:#343e81}
-html[data-theme="sakura"]{--sea-base:#0a172f;--sea-plate-a:#29356f;--sea-plate-b:#213b75;--sea-plate-c:#373e7f}
-html[data-theme="cyber"]{--sea-base:#061a31;--sea-plate-a:#1f3b72;--sea-plate-b:#15447b;--sea-plate-c:#294981}
-html[data-theme="aurora"]{--sea-base:#061b30;--sea-plate-a:#203d70;--sea-plate-b:#184378;--sea-plate-c:#2c4880}
-html[data-theme="storm"]{--sea-base:#0a1629;--sea-plate-a:#29366a;--sea-plate-b:#22396d;--sea-plate-c:#374071}
-html[data-theme="mono"]{--sea-base:#0b1627;--sea-plate-a:#2a3563;--sea-plate-b:#243865;--sea-plate-c:#38406a}
-
-/* Dark Apple-ish liquid glass. Keep the UI readable without becoming a flashlight. */
-body::before{
-  background:linear-gradient(180deg,rgba(1,5,13,.42),rgba(2,8,18,.62))!important;
-}
-.card,.homeWidget,.chat,.profileDialog .dialogCard,.shareView,.inviteCard{
-  background:linear-gradient(145deg,rgba(18,27,43,.76),rgba(9,16,29,.72))!important;
-  border-color:rgba(174,198,255,.13)!important;
-  backdrop-filter:blur(28px) saturate(1.08)!important;
-  -webkit-backdrop-filter:blur(28px) saturate(1.08)!important;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.055),0 18px 55px rgba(0,0,0,.24)!important;
-}
-.homeWidget,.contactCard,.themeChoice{
-  background:linear-gradient(145deg,rgba(20,30,48,.56),rgba(12,19,32,.54))!important;
-}
-.topbar,.composer{
-  background:rgba(8,14,25,.74)!important;
-  backdrop-filter:blur(26px) saturate(1.08)!important;
-  -webkit-backdrop-filter:blur(26px) saturate(1.08)!important;
-}
-
-@media(max-width:650px){.waterMap{inset:-9%;width:118%;height:118%;filter:saturate(.84) brightness(.50) contrast(1.14)}}
-@media(prefers-reduced-motion:reduce){.waterIslands,.waterMap,.waterContour{animation:none!important}}
-
+/* FINAL WATER BACKDROP — single authoritative layer */
+.oceanBackdrop:not(.oceanBackdropV13){display:none!important}
+.oceanBackdropV13{position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;min-height:100vh!important;z-index:-4!important;overflow:hidden!important;pointer-events:none!important;opacity:1!important;background:#050b17!important}
+.oceanBackdropV13 .waterMap{position:absolute!important;inset:-6%!important;width:112%!important;height:112%!important;display:block!important;transform:scale(1.02);filter:brightness(.42) saturate(.82) contrast(1.08);animation:waterMapBreathe 18s ease-in-out infinite alternate!important}
+.oceanBackdropV13 .waterBase{fill:#061127!important}
+.oceanBackdropV13 .waterDepth path{fill:#081b37!important;opacity:.78!important}
+.oceanBackdropV13 .waterPlate{stroke:rgba(164,190,255,.25)!important;stroke-width:2.2!important;vector-effect:non-scaling-stroke;filter:none!important}
+.oceanBackdropV13 .plate1,.oceanBackdropV13 .plate4,.oceanBackdropV13 .plate6{fill:#1a2d61!important}
+.oceanBackdropV13 .plate2,.oceanBackdropV13 .plate5,.oceanBackdropV13 .plate7{fill:#16376b!important}
+.oceanBackdropV13 .plate3{fill:#293874!important}
+.oceanBackdropV13 .waterContour{fill:none!important;stroke:rgba(184,205,255,.28)!important;stroke-width:1.6!important;vector-effect:non-scaling-stroke;stroke-linecap:round;opacity:.62!important;stroke-dasharray:none!important;filter:none!important;animation:none!important}
+.oceanBackdropV13 .waterIslands{transform-origin:center;will-change:transform}
+.oceanBackdropV13 .islandA,.oceanBackdropV13 .islandD,.oceanBackdropV13 .islandF{animation:waterDriftA 24s ease-in-out infinite alternate!important}
+.oceanBackdropV13 .islandB,.oceanBackdropV13 .islandE,.oceanBackdropV13 .islandG{animation:waterDriftB 29s ease-in-out infinite alternate!important}
+.oceanBackdropV13 .islandC{animation:waterDriftC 32s ease-in-out infinite alternate!important}
+@keyframes waterDriftA{from{transform:translate3d(-7px,4px,0)}to{transform:translate3d(10px,-7px,0)}}
+@keyframes waterDriftB{from{transform:translate3d(7px,-4px,0)}to{transform:translate3d(-9px,8px,0)}}
+@keyframes waterDriftC{from{transform:translate3d(-4px,-6px,0)}to{transform:translate3d(8px,6px,0)}}
+@keyframes waterMapBreathe{from{transform:scale(1.02) translate3d(-.18%,0,0)}to{transform:scale(1.035) translate3d(.18%,-.18%,0)}}
+/* Themes may tint UI, but never recolor the water artwork. */
+html[data-theme] .oceanBackdropV13{filter:none!important}
+body::before{background:linear-gradient(180deg,rgba(1,4,11,.34),rgba(1,5,13,.54))!important;pointer-events:none}
+.card,.homeWidget,.chat,.profileDialog .dialogCard,.shareView,.inviteCard{background:linear-gradient(145deg,rgba(16,23,37,.76),rgba(7,12,22,.72))!important;border-color:rgba(174,198,255,.11)!important;backdrop-filter:blur(28px) saturate(1.05)!important;-webkit-backdrop-filter:blur(28px) saturate(1.05)!important}
+.homeWidget,.contactCard,.themeChoice{background:linear-gradient(145deg,rgba(18,27,43,.54),rgba(9,15,27,.52))!important}
+.topbar,.composer{background:rgba(7,12,22,.76)!important;backdrop-filter:blur(26px) saturate(1.05)!important;-webkit-backdrop-filter:blur(26px) saturate(1.05)!important}
+@media(max-width:650px){.oceanBackdropV13 .waterMap{inset:-10%!important;width:120%!important;height:120%!important;filter:brightness(.39) saturate(.80) contrast(1.08)}}
+@media(prefers-reduced-motion:reduce){.oceanBackdropV13 .waterIslands,.oceanBackdropV13 .waterMap{animation:none!important}}
