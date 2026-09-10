@@ -19,6 +19,7 @@ fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 fs.mkdirSync(BACKUP_DIR, { recursive: true });
 const db = new Database(process.env.DB_FILE || path.join(DATA_DIR, 'chat.db'));
 const PORT = Number(process.env.PORT || 3000);
+const heartbeatExpiryTimers = new Map();
 
 app.use(express.json({ limit: '64kb' }));
 app.use('/uploads', express.static(UPLOAD_DIR, { fallthrough: false, maxAge: '7d' }));
@@ -178,7 +179,11 @@ function presencePayload(roomId) {
   const lastSeen = { creator: null, guest: null };
   const activity = { creator: null, guest: null };
   const statusAt = { creator: null, guest: null };
-  for (const row of rows) { lastSeen[row.role] = row.lastSeen || null; activity[row.role] = row.activityStatus || null; statusAt[row.role] = row.statusAt || null; }
+  const recentCutoff = Date.now() - 16000;
+  for (const row of rows) {
+    lastSeen[row.role] = row.lastSeen || null; activity[row.role] = row.activityStatus || null; statusAt[row.role] = row.statusAt || null;
+    if (row.lastSeen && row.lastSeen >= recentCutoff && row.activityStatus !== 'emergency') onlineRoles.add(row.role);
+  }
   return { online: [...onlineRoles], lastSeen, activity, statusAt };
 }
 
@@ -274,6 +279,19 @@ app.patch('/api/rooms/:roomId/profile', (req, res) => {
   const profile = getProfiles(req.params.roomId)[auth.role];
   io.to(req.params.roomId).emit('profile', { role: auth.role, ...profile });
   res.json(profile);
+});
+
+app.post('/api/rooms/:roomId/heartbeat', (req, res) => {
+  const auth = authRequest(req);
+  if (!auth) return res.status(401).json({ error: 'Not authorized.' });
+  const roomId = req.params.roomId;
+  const now = Date.now();
+  db.prepare('UPDATE profiles SET last_seen = ? WHERE room_id = ? AND role = ?').run(now, roomId, auth.role);
+  const key = `${roomId}:${auth.role}`;
+  clearTimeout(heartbeatExpiryTimers.get(key));
+  heartbeatExpiryTimers.set(key, setTimeout(() => { heartbeatExpiryTimers.delete(key); emitPresence(roomId); }, 17000));
+  emitPresence(roomId);
+  res.json({ ok: true, at: now });
 });
 
 app.post('/api/rooms/:roomId/activity-status', (req, res) => {
