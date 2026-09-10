@@ -170,7 +170,7 @@ function serializeMessages(roomId) {
     if (!byId.has(r.messageId)) byId.set(r.messageId, []);
     byId.get(r.messageId).push({ role: r.role, emoji: r.emoji });
   }
-  return rows.map(m => ({ ...m, body: m.deletedAt ? '' : m.body, mediaUrl: m.deletedAt ? null : m.mediaUrl, reactions: byId.get(m.id) || [] }));
+  return rows.map(m => ({ ...m, reactions: byId.get(m.id) || [] }));
 }
 
 
@@ -427,9 +427,8 @@ io.on('connection', socket => {
     if (!Number.isInteger(id)) return;
     const msg = db.prepare('SELECT * FROM messages WHERE id = ? AND room_id = ? AND sender = ? AND deleted_at IS NULL').get(id, roomId, role);
     if (!msg) return;
-    db.prepare('UPDATE messages SET deleted_at = ?, body = ?, media_url = NULL WHERE id = ?').run(Date.now(), '', id);
+    db.prepare('UPDATE messages SET deleted_at = ? WHERE id = ?').run(Date.now(), id);
     db.prepare('DELETE FROM reactions WHERE message_id = ?').run(id);
-    deleteLocalMedia(msg.media_url);
     io.to(roomId).emit('message-deleted', { messageId: id });
   });
 
