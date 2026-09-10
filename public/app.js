@@ -3,6 +3,29 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':
 const views = ['landing','share','chat','error'];
 const show = id => { views.forEach(v => $(v).classList.toggle('hidden', v !== id)); $('appChrome')?.classList.toggle('hidden', id === 'chat'); };
 
+// v11: lightweight animated ocean backdrop + liquid tap feedback
+function ensureOceanBackdrop(){
+  if(document.querySelector('.oceanBackdrop')) return;
+  const ocean=document.createElement('div');
+  ocean.className='oceanBackdrop';
+  ocean.setAttribute('aria-hidden','true');
+  ocean.innerHTML='<div class="oceanWave three"></div><div class="oceanWave two"></div><div class="oceanWave one"></div><div class="oceanFoam"></div>';
+  document.body.prepend(ocean);
+}
+ensureOceanBackdrop();
+
+document.addEventListener('pointerdown',e=>{
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const target=e.target.closest('button,.contactCard,.themeChoice');
+  if(!target) return;
+  const ripple=document.createElement('span');
+  ripple.className='liquidTapRipple';
+  ripple.style.left=`${e.clientX}px`;
+  ripple.style.top=`${e.clientY}px`;
+  document.body.append(ripple);
+  setTimeout(()=>ripple.remove(),560);
+},{passive:true});
+
 const onboardingVersion = 'justtwo:onboarding:v4';
 const returningAtBoot = localStorage.getItem(onboardingVersion)==='done';
 let onboardingStep = 0;
