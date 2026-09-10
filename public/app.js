@@ -861,3 +861,15 @@ async function boot(){
   if(returningAtBoot) setTimeout(engagePrivacyShield,80);
 }
 boot();
+
+
+function installSwipeToReply(){
+ const box=$('messages');if(!box||box.dataset.swipeReplyReady)return;box.dataset.swipeReplyReady='1';
+ let row=null,sx=0,sy=0,axis=null;
+ const reset=(fire=false)=>{if(!row)return;const r=row;r.classList.remove('swipingReply','swipeReplyReady');r.classList.add('replySnapBack');r.style.transform='';setTimeout(()=>r.classList.remove('replySnapBack'),190);if(fire)r.querySelector('.messageReplyBtn,[data-reply],.replyAction')?.click();row=null;axis=null};
+ box.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;if(e.target.closest('button,a,input,textarea,audio'))return;row=e.target.closest('.messageRow');if(!row)return;sx=e.clientX;sy=e.clientY;axis=null;if(!row.querySelector('.swipeReplyCue')){const q=document.createElement('span');q.className='swipeReplyCue';q.textContent='↩';row.append(q)}},{passive:true});
+ box.addEventListener('pointermove',e=>{if(!row)return;const dx=e.clientX-sx,dy=e.clientY-sy;if(!axis&&Math.max(Math.abs(dx),Math.abs(dy))>7)axis=Math.abs(dx)>Math.abs(dy)?'x':'y';if(axis==='y'){reset();return}if(axis!=='x')return;const mine=row.classList.contains('mine'),d=mine?-dx:dx;if(d<=0){row.style.transform='';return}const drag=Math.min(82,d*.72);row.classList.add('swipingReply');row.style.transform=`translateX(${mine?-drag:drag}px)`;row.classList.toggle('swipeReplyReady',d>=58)},{passive:true});
+ box.addEventListener('pointerup',e=>{if(!row)return;const mine=row.classList.contains('mine'),d=mine?-(e.clientX-sx):(e.clientX-sx);reset(axis==='x'&&d>=58)},{passive:true});
+ box.addEventListener('pointercancel',()=>reset(),{passive:true});
+}
+installSwipeToReply();

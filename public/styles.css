@@ -654,3 +654,12 @@ body{position:relative!important;isolation:isolate!important;background:none!imp
 .messageRow.replyFlash .msg{animation:replyFlash .9s ease}@keyframes replyFlash{0%,100%{box-shadow:none}40%{box-shadow:0 0 0 4px rgba(105,170,255,.38)}}
 .reactionHead span{display:flex;align-items:center;gap:6px}.reactionHead .replyMenuBtn{font-size:11px!important;width:auto!important;padding:6px 10px!important;border-radius:9px!important;background:var(--soft)!important}
 @media (min-width:700px) and (max-width:1200px) and (orientation:landscape){body.ipadKeyboardOpen .replyComposer{position:absolute;right:12px;bottom:118px;width:326px;z-index:71;margin:0;border-bottom:1px solid var(--line);border-radius:15px}}
+
+/* v27 white-control fix + swipe reply */
+.messageRow button,.messageRow .reactionQuick,.messageRow .messageActions,.messageRow .messageActionBar{
+-webkit-appearance:none!important;appearance:none!important;background:rgba(15,25,43,.94)!important;color:var(--ink)!important;border-color:rgba(255,255,255,.12)!important}
+.messageRow.swipingReply{transition:none!important;will-change:transform;touch-action:pan-y}
+.messageRow.replySnapBack{transition:transform .18s cubic-bezier(.2,.8,.2,1)!important}
+.swipeReplyCue{position:absolute;top:50%;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;opacity:0;background:rgba(124,92,255,.2);border:1px solid rgba(170,150,255,.35);color:#c9bcff;font-weight:900;pointer-events:none;transform:translateY(-50%) scale(.8)}
+.messageRow.mine .swipeReplyCue{right:-38px}.messageRow.theirs .swipeReplyCue{left:-38px}
+.messageRow.swipeReplyReady .swipeReplyCue{opacity:1;transform:translateY(-50%) scale(1)}
