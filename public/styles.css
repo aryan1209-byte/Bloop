@@ -614,3 +614,43 @@ body{position:relative!important;isolation:isolate!important;background:none!imp
 
 /* v23: join-code + alert feedback */
 .joinCodeWidget{margin-top:16px}.joinCodeRow{display:flex;gap:9px;align-items:center}.joinCodeRow input{flex:1;min-width:0;padding:12px 14px;border-radius:16px;border:1px solid var(--line);background:var(--soft);color:var(--ink);font:800 16px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;text-transform:uppercase}.joinCodeRow button{min-height:44px;padding:0 18px;border-radius:15px}.shareCodeLabel{display:block;margin-top:12px;font-size:11px;font-weight:850;color:var(--muted);text-transform:uppercase;letter-spacing:.09em}.alertTestBtn{width:100%;min-height:40px;margin-top:4px}.globalMessageToast{position:fixed;z-index:500;top:max(18px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(390px,calc(100vw - 28px));display:flex;flex-direction:column;gap:2px;padding:11px 14px;border-radius:18px;background:rgba(16,25,39,.88);border:1px solid rgba(255,255,255,.16);box-shadow:0 16px 50px rgba(0,0,0,.30);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);color:#f7fbff;animation:noticeIn .18s ease-out}.globalMessageToast strong{font-size:13px}.globalMessageToast span{font-size:12px;opacity:.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.globalMessageToast.hidden{display:none!important}@media(max-width:650px){.joinCodeRow{align-items:stretch}.joinCodeRow button{padding:0 14px}}
+
+
+/* v24 synchronized contact removal / restore flow */
+.contactStatus.removed{color:#ffb86b!important}
+.contactCard.contactRemoved{border-style:dashed!important;opacity:.92}
+.contactCard.contactRemovedByMe{box-shadow:inset 0 0 0 1px rgba(255,184,107,.14),0 10px 26px rgba(0,0,0,.13)!important}
+.contactMiniAction{border:1px solid var(--line);border-radius:10px;padding:6px 9px;background:rgba(255,255,255,.06);color:var(--ink);font-size:10px;font-weight:850;cursor:pointer}
+.contactMiniAction.restore{border-color:#55d98a55;color:#8ff0b4}
+.contactMiniAction.delete{border-color:#ff6b6b55;color:#ff9292}
+.contactStateBanner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;margin:8px 10px 0;border:1px solid rgba(255,184,107,.34);border-radius:16px;background:color-mix(in srgb,var(--panel) 88%,#c47b31 12%);color:var(--ink);z-index:8}
+.contactStateBanner.hidden{display:none!important}
+.contactStateCopy{display:grid;gap:3px;min-width:0}
+.contactStateCopy strong{font-size:12px}
+.contactStateCopy span{font-size:11px;color:var(--muted);line-height:1.35}
+.contactStateActions{display:flex;gap:7px;flex:none}
+.contactStateActions button{padding:8px 10px;border-radius:11px;font-size:11px;font-weight:850}
+.dangerOutline{border-color:#ff676766!important;color:#ff8f8f!important}
+.composer.contactRemovedLocked{opacity:.46;filter:saturate(.6)}
+.composer.contactRemovedLocked textarea{cursor:not-allowed}
+@media(max-width:650px){
+  .contactStateBanner{align-items:stretch;flex-direction:column}
+  .contactStateActions{width:100%}
+  .contactStateActions button{flex:1}
+  .contactMiniAction{padding:6px 7px}
+}
+
+/* v25 chat code + richer Home live status */
+.chatCodePill{margin-left:auto;display:flex;align-items:center;gap:7px;padding:5px 6px 5px 10px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.055);font-size:10px;color:var(--muted);white-space:nowrap}
+.chatCodePill.hidden{display:none!important}.chatCodePill b{color:var(--ink);font-size:11px;letter-spacing:.08em}.chatCodePill button{border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.07);color:var(--ink);font-size:9px;font-weight:800;padding:5px 7px;cursor:pointer}
+.contactStatus.busy{color:#ffd56a!important}.contactPresenceDot.busy{background:#ffd56a!important;box-shadow:0 0 0 3px rgba(255,213,106,.12)}
+@media(max-width:650px){.chatCodePill{padding:4px 5px 4px 7px;gap:5px}.chatCodePill span,.chatCodePill b{font-size:9px}.chatCodePill button{padding:4px 5px}}
+
+
+/* v26 message replies */
+.replyComposer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;margin:0 10px;border:1px solid var(--line);border-bottom:0;border-radius:15px 15px 0 0;background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.replyComposer.hidden{display:none!important}.replyComposer>div{min-width:0;display:grid;gap:2px}.replyComposer strong{font-size:11px;color:var(--accent)}.replyComposer span{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(65vw,520px)}.replyComposer button{border:0;background:transparent;color:var(--muted);font-size:20px;cursor:pointer}
+.replyReference{display:grid;width:100%;text-align:left;gap:2px;margin:0 0 7px;padding:7px 9px;border:0;border-left:3px solid currentColor;border-radius:8px;background:rgba(255,255,255,.09);color:inherit;cursor:pointer;opacity:.92}.replyReference strong{font-size:10px}.replyReference span{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}.theirs .replyReference{background:rgba(0,0,0,.055)}
+.messageRow.replyFlash .msg{animation:replyFlash .9s ease}@keyframes replyFlash{0%,100%{box-shadow:none}40%{box-shadow:0 0 0 4px rgba(105,170,255,.38)}}
+.reactionHead span{display:flex;align-items:center;gap:6px}.reactionHead .replyMenuBtn{font-size:11px!important;width:auto!important;padding:6px 10px!important;border-radius:9px!important;background:var(--soft)!important}
+@media (min-width:700px) and (max-width:1200px) and (orientation:landscape){body.ipadKeyboardOpen .replyComposer{position:absolute;right:12px;bottom:118px;width:326px;z-index:71;margin:0;border-bottom:1px solid var(--line);border-radius:15px}}

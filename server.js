@@ -34,10 +34,13 @@ CREATE TABLE IF NOT EXISTS rooms (
   id TEXT PRIMARY KEY,
   share_token_hash TEXT NOT NULL UNIQUE,
   join_code_hash TEXT UNIQUE,
+  join_code TEXT,
   creator_token_hash TEXT NOT NULL,
   guest_token_hash TEXT,
   invite_status TEXT NOT NULL DEFAULT 'pending',
   invite_status_at INTEGER,
+  contact_removed_by TEXT CHECK(contact_removed_by IN ('creator','guest')),
+  contact_removed_at INTEGER,
   created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS messages (
@@ -50,6 +53,7 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at INTEGER NOT NULL,
   deleted_at INTEGER,
   seen_at INTEGER,
+  reply_to_id INTEGER,
   FOREIGN KEY(room_id) REFERENCES rooms(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS reactions (
@@ -84,14 +88,18 @@ for (const [name, sql] of [
   ['type', `ALTER TABLE messages ADD COLUMN type TEXT NOT NULL DEFAULT 'text'`],
   ['media_url', `ALTER TABLE messages ADD COLUMN media_url TEXT`],
   ['deleted_at', `ALTER TABLE messages ADD COLUMN deleted_at INTEGER`],
-  ['seen_at', `ALTER TABLE messages ADD COLUMN seen_at INTEGER`]
+  ['seen_at', `ALTER TABLE messages ADD COLUMN seen_at INTEGER`],
+  ['reply_to_id', `ALTER TABLE messages ADD COLUMN reply_to_id INTEGER`]
 ]) if (!messageColumns.includes(name)) db.exec(sql);
 
 
 const roomColumns = db.prepare('PRAGMA table_info(rooms)').all().map(c => c.name);
 if (!roomColumns.includes('invite_status')) db.exec(`ALTER TABLE rooms ADD COLUMN invite_status TEXT NOT NULL DEFAULT 'pending'`);
 if (!roomColumns.includes('join_code_hash')) db.exec(`ALTER TABLE rooms ADD COLUMN join_code_hash TEXT`);
+if (!roomColumns.includes('join_code')) db.exec(`ALTER TABLE rooms ADD COLUMN join_code TEXT`);
 if (!roomColumns.includes('invite_status_at')) db.exec(`ALTER TABLE rooms ADD COLUMN invite_status_at INTEGER`);
+if (!roomColumns.includes('contact_removed_by')) db.exec(`ALTER TABLE rooms ADD COLUMN contact_removed_by TEXT`);
+if (!roomColumns.includes('contact_removed_at')) db.exec(`ALTER TABLE rooms ADD COLUMN contact_removed_at INTEGER`);
 
 const profileColumns = db.prepare('PRAGMA table_info(profiles)').all().map(c => c.name);
 if (!profileColumns.includes('last_seen')) db.exec(`ALTER TABLE profiles ADD COLUMN last_seen INTEGER`);
@@ -154,6 +162,20 @@ function authRequest(req) {
   return authenticate(req.params.roomId, req.header('x-chat-token'));
 }
 
+function contactStatePayload(room, role) {
+  const removedBy = room?.contact_removed_by || null;
+  return {
+    removed: Boolean(removedBy),
+    removedBy,
+    removedAt: room?.contact_removed_at || null,
+    removedByMe: Boolean(removedBy && removedBy === role)
+  };
+}
+
+function canSendInRoom(room, role) {
+  return !room?.contact_removed_by || room.contact_removed_by !== role;
+}
+
 function getProfiles(roomId) {
   const rows = db.prepare('SELECT role, display_name AS displayName, avatar_url AS avatarUrl, username, last_seen AS lastSeen, activity_status AS activityStatus, status_at AS statusAt FROM profiles WHERE room_id = ?').all(roomId);
   const out = {
@@ -166,7 +188,7 @@ function getProfiles(roomId) {
 
 function serializeMessages(roomId) {
   const rows = db.prepare(`
-    SELECT id, sender, body, type, media_url AS mediaUrl, created_at AS createdAt, deleted_at AS deletedAt, seen_at AS seenAt
+    SELECT id, sender, body, type, media_url AS mediaUrl, created_at AS createdAt, deleted_at AS deletedAt, seen_at AS seenAt, reply_to_id AS replyToId
     FROM messages WHERE room_id = ? ORDER BY id ASC LIMIT 1000
   `).all(roomId);
   const reactions = db.prepare(`
@@ -179,7 +201,19 @@ function serializeMessages(roomId) {
     if (!byId.has(r.messageId)) byId.set(r.messageId, []);
     byId.get(r.messageId).push({ role: r.role, emoji: r.emoji });
   }
-  return rows.map(m => ({ ...m, body: m.deletedAt ? '' : m.body, mediaUrl: m.deletedAt ? null : m.mediaUrl, reactions: byId.get(m.id) || [] }));
+  const sourceById = new Map(rows.map(m => [m.id, m]));
+  return rows.map(m => {
+    const source = m.replyToId ? sourceById.get(m.replyToId) : null;
+    const replyTo = source ? {
+      id: source.id,
+      sender: source.sender,
+      type: source.deletedAt ? 'deleted' : source.type,
+      body: source.deletedAt ? '' : source.body,
+      mediaUrl: source.deletedAt ? null : source.mediaUrl,
+      deleted: Boolean(source.deletedAt)
+    } : null;
+    return { ...m, body: m.deletedAt ? '' : m.body, mediaUrl: m.deletedAt ? null : m.mediaUrl, replyTo, reactions: byId.get(m.id) || [] };
+  });
 }
 
 
@@ -221,6 +255,23 @@ function deleteLocalMedia(url) {
 }
 
 
+
+function ensureRoomJoinCode(roomId) {
+  const existing = db.prepare('SELECT join_code AS joinCode FROM rooms WHERE id = ?').get(roomId)?.joinCode;
+  if (existing) return existing;
+  let joinCode = null;
+  for (let tries = 0; tries < 20; tries++) {
+    const candidate = makeJoinCode();
+    const normalized = normalizeJoinCode(candidate);
+    if (!db.prepare('SELECT 1 FROM rooms WHERE join_code_hash = ?').get(sha256(normalized))) {
+      joinCode = candidate;
+      db.prepare('UPDATE rooms SET join_code = ?, join_code_hash = ? WHERE id = ?').run(joinCode, sha256(normalized), roomId);
+      break;
+    }
+  }
+  return joinCode;
+}
+
 app.get('/api/app-status', (_req, res) => res.json({ locked: appLocked() }));
 app.post('/api/emergency/unlock', (req, res) => {
   if (!safePasswordMatch(req.body?.password)) return res.status(401).json({ error: 'Wrong password.' });
@@ -256,8 +307,8 @@ app.post('/api/rooms', (_req, res) => {
     if(!db.prepare('SELECT 1 FROM rooms WHERE join_code_hash = ?').get(sha256(normalizeJoinCode(candidate)))){joinCode=candidate;break;}
   }
   if(!joinCode) return res.status(503).json({error:'Could not create a join code. Try again.'});
-  db.prepare('INSERT INTO rooms (id, share_token_hash, join_code_hash, creator_token_hash, created_at) VALUES (?, ?, ?, ?, ?)')
-    .run(roomId, sha256(shareToken), sha256(normalizeJoinCode(joinCode)), sha256(creatorToken), Date.now());
+  db.prepare('INSERT INTO rooms (id, share_token_hash, join_code_hash, join_code, creator_token_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(roomId, sha256(shareToken), sha256(normalizeJoinCode(joinCode)), joinCode, sha256(creatorToken), Date.now());
   db.prepare(`INSERT OR IGNORE INTO profiles (room_id, role, display_name) VALUES (?, 'creator', 'You')`).run(roomId);
   res.json({ roomId, shareToken, creatorToken, joinCode });
 });
@@ -309,7 +360,56 @@ app.get('/api/rooms/:roomId/messages', (req, res) => {
   const auth = authRequest(req);
   if (!auth) return res.status(401).json({ error: 'Not authorized.' });
   const unreadCount = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE room_id = ? AND sender != ? AND seen_at IS NULL AND deleted_at IS NULL').get(req.params.roomId, auth.role).n;
-  res.json({ role: auth.role, messages: serializeMessages(req.params.roomId), profiles: getProfiles(req.params.roomId), presence: presencePayload(req.params.roomId), unreadCount, inviteStatus: auth.room.invite_status || 'pending', inviteStatusAt: auth.room.invite_status_at || null });
+  const liveRoom = db.prepare('SELECT * FROM rooms WHERE id = ?').get(req.params.roomId);
+  const joinCode = liveRoom?.join_code || ensureRoomJoinCode(req.params.roomId);
+  res.json({ role: auth.role, messages: serializeMessages(req.params.roomId), profiles: getProfiles(req.params.roomId), presence: presencePayload(req.params.roomId), unreadCount, inviteStatus: auth.room.invite_status || 'pending', inviteStatusAt: auth.room.invite_status_at || null, joinCode, contactState: contactStatePayload(liveRoom, auth.role) });
+});
+
+
+app.post('/api/rooms/:roomId/contact/remove', (req, res) => {
+  const auth = authRequest(req);
+  if (!auth) return res.status(401).json({ error: 'Not authorized.' });
+  const latest = db.prepare('SELECT * FROM rooms WHERE id = ?').get(req.params.roomId);
+  if (!latest) return res.status(404).json({ error: 'Chat not found.' });
+  if (latest.contact_removed_by && latest.contact_removed_by !== auth.role) {
+    return res.status(409).json({ error: 'The other person already removed this chat.' });
+  }
+  const now = Date.now();
+  db.prepare('UPDATE rooms SET contact_removed_by = ?, contact_removed_at = ? WHERE id = ?')
+    .run(auth.role, now, req.params.roomId);
+  const payload = { removed: true, removedBy: auth.role, removedAt: now };
+  io.to(req.params.roomId).emit('contact-state', payload);
+  res.json({ ...payload, removedByMe: true });
+});
+
+app.post('/api/rooms/:roomId/contact/restore', (req, res) => {
+  const auth = authRequest(req);
+  if (!auth) return res.status(401).json({ error: 'Not authorized.' });
+  const latest = db.prepare('SELECT * FROM rooms WHERE id = ?').get(req.params.roomId);
+  if (!latest) return res.status(404).json({ error: 'Chat not found.' });
+  if (!latest.contact_removed_by) return res.json({ removed: false, removedBy: null, removedAt: null, removedByMe: false });
+  if (latest.contact_removed_by !== auth.role) return res.status(403).json({ error: 'Only the person who removed the chat can restore it.' });
+  db.prepare('UPDATE rooms SET contact_removed_by = NULL, contact_removed_at = NULL WHERE id = ?').run(req.params.roomId);
+  const payload = { removed: false, removedBy: null, removedAt: null };
+  io.to(req.params.roomId).emit('contact-state', payload);
+  res.json({ ...payload, removedByMe: false });
+});
+
+app.delete('/api/rooms/:roomId/contact', (req, res) => {
+  const auth = authRequest(req);
+  if (!auth) return res.status(401).json({ error: 'Not authorized.' });
+  const latest = db.prepare('SELECT * FROM rooms WHERE id = ?').get(req.params.roomId);
+  if (!latest) return res.status(404).json({ error: 'Chat not found.' });
+  if (latest.contact_removed_by !== auth.role) return res.status(403).json({ error: 'Only the person who removed the chat can permanently delete it.' });
+
+  io.to(req.params.roomId).emit('contact-deleted', { roomId: req.params.roomId });
+  db.prepare('DELETE FROM rooms WHERE id = ?').run(req.params.roomId);
+  res.json({ ok: true });
+
+  setTimeout(() => {
+    const ids = [...(io.sockets.adapter.rooms.get(req.params.roomId) || [])];
+    for (const id of ids) io.sockets.sockets.get(id)?.disconnect(true);
+  }, 40);
 });
 
 app.patch('/api/rooms/:roomId/profile', (req, res) => {
@@ -345,7 +445,7 @@ app.post('/api/rooms/:roomId/activity-status', (req, res) => {
   const auth = authRequest(req);
   if (!auth) return res.status(401).json({ error: 'Not authorized.' });
   const raw = String(req.body?.status || 'active');
-  if (!['active','blurred','emergency','recording-audio','taking-photo'].includes(raw)) return res.status(400).json({ error: 'Invalid status.' });
+  if (!['active','blurred','emergency','recording-audio','taking-photo','typing'].includes(raw)) return res.status(400).json({ error: 'Invalid status.' });
   const stored = raw === 'active' ? null : raw;
   const now = Date.now();
   db.prepare('UPDATE profiles SET activity_status = ?, status_at = ? WHERE room_id = ? AND role = ?').run(stored, now, req.params.roomId, auth.role);
@@ -356,6 +456,8 @@ app.post('/api/rooms/:roomId/activity-status', (req, res) => {
 app.post('/api/rooms/:roomId/upload/:kind', express.raw({ type: '*/*', limit: '8mb' }), (req, res) => {
   const auth = authRequest(req);
   if (!auth) return res.status(401).json({ error: 'Not authorized.' });
+  const latestRoom = db.prepare('SELECT * FROM rooms WHERE id = ?').get(req.params.roomId);
+  if (!canSendInRoom(latestRoom, auth.role)) return res.status(409).json({ error: 'Restore this chat before sending.' });
   const kind = req.params.kind;
   if (!['image', 'audio', 'avatar'].includes(kind)) return res.status(400).json({ error: 'Unsupported upload.' });
   const mime = String(req.header('content-type') || '').split(';')[0].toLowerCase();
@@ -381,9 +483,13 @@ app.post('/api/rooms/:roomId/upload/:kind', express.raw({ type: '*/*', limit: '8
 
   const createdAt = Date.now();
   const type = kind === 'audio' ? 'audio' : 'image';
-  const info = db.prepare('INSERT INTO messages (room_id, sender, body, type, media_url, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(req.params.roomId, auth.role, '', type, url, createdAt);
-  const msg = { id: Number(info.lastInsertRowid), sender: auth.role, body: '', type, mediaUrl: url, createdAt, deletedAt: null, seenAt: null, reactions: [] };
+  const rawReplyId = Number(req.header('x-reply-to') || 0);
+  const replySource = rawReplyId ? db.prepare('SELECT id, sender, body, type, media_url AS mediaUrl, deleted_at AS deletedAt FROM messages WHERE id = ? AND room_id = ?').get(rawReplyId, req.params.roomId) : null;
+  const replyToId = replySource ? rawReplyId : null;
+  const info = db.prepare('INSERT INTO messages (room_id, sender, body, type, media_url, created_at, reply_to_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(req.params.roomId, auth.role, '', type, url, createdAt, replyToId);
+  const replyTo = replySource ? { id: replySource.id, sender: replySource.sender, type: replySource.deletedAt ? 'deleted' : replySource.type, body: replySource.deletedAt ? '' : replySource.body, mediaUrl: replySource.deletedAt ? null : replySource.mediaUrl, deleted: Boolean(replySource.deletedAt) } : null;
+  const msg = { id: Number(info.lastInsertRowid), sender: auth.role, body: '', type, mediaUrl: url, createdAt, deletedAt: null, seenAt: null, replyToId, replyTo, reactions: [] };
   io.to(req.params.roomId).emit('message', msg);
   res.json(msg);
 });
@@ -405,12 +511,17 @@ io.on('connection', socket => {
   emitPresence(roomId);
 
   socket.on('typing', value => {
-    socket.to(roomId).emit('typing', { role, typing: Boolean(value) });
+    const typing = Boolean(value);
+    const now = Date.now();
+    db.prepare('UPDATE profiles SET activity_status = ?, status_at = ?, last_seen = ? WHERE room_id = ? AND role = ?')
+      .run(typing ? 'typing' : null, now, now, roomId, role);
+    socket.to(roomId).emit('typing', { role, typing });
+    emitPresence(roomId);
   });
 
   socket.on('activity-status', (value, ack) => {
     const raw = String(value || 'active');
-    if (!['active','blurred','emergency','recording-audio','taking-photo'].includes(raw)) { if (typeof ack === 'function') ack({ ok: false }); return; }
+    if (!['active','blurred','emergency','recording-audio','taking-photo','typing'].includes(raw)) { if (typeof ack === 'function') ack({ ok: false }); return; }
     const stored = raw === 'active' ? null : raw;
     const now = Date.now();
     db.prepare('UPDATE profiles SET activity_status = ?, status_at = ? WHERE room_id = ? AND role = ?').run(stored, now, roomId, role);
@@ -419,14 +530,24 @@ io.on('connection', socket => {
   });
 
   socket.on('message', raw => {
-    if (typeof raw !== 'string') return;
-    const body = raw.trim().slice(0, 2000);
+    const payload = typeof raw === 'string' ? { body: raw, replyToId: null } : (raw && typeof raw === 'object' ? raw : null);
+    if (!payload || typeof payload.body !== 'string') return;
+    const latestRoom = db.prepare('SELECT * FROM rooms WHERE id = ?').get(roomId);
+    if (!canSendInRoom(latestRoom, role)) {
+      socket.emit('send-blocked', { reason: 'removed-by-you' });
+      return;
+    }
+    const body = payload.body.trim().slice(0, 2000);
     if (!body) return;
     const createdAt = Date.now();
-    const info = db.prepare(`INSERT INTO messages (room_id, sender, body, type, created_at) VALUES (?, ?, ?, 'text', ?)`)
-      .run(roomId, role, body, createdAt);
+    const rawReplyId = Number(payload.replyToId || 0);
+    const replySource = rawReplyId ? db.prepare('SELECT id, sender, body, type, media_url AS mediaUrl, deleted_at AS deletedAt FROM messages WHERE id = ? AND room_id = ?').get(rawReplyId, roomId) : null;
+    const replyToId = replySource ? rawReplyId : null;
+    const info = db.prepare(`INSERT INTO messages (room_id, sender, body, type, created_at, reply_to_id) VALUES (?, ?, ?, 'text', ?, ?)`)
+      .run(roomId, role, body, createdAt, replyToId);
+    const replyTo = replySource ? { id: replySource.id, sender: replySource.sender, type: replySource.deletedAt ? 'deleted' : replySource.type, body: replySource.deletedAt ? '' : replySource.body, mediaUrl: replySource.deletedAt ? null : replySource.mediaUrl, deleted: Boolean(replySource.deletedAt) } : null;
     socket.to(roomId).emit('typing', { role, typing: false });
-    io.to(roomId).emit('message', { id: Number(info.lastInsertRowid), sender: role, body, type: 'text', mediaUrl: null, createdAt, deletedAt: null, seenAt: null, reactions: [] });
+    io.to(roomId).emit('message', { id: Number(info.lastInsertRowid), sender: role, body, type: 'text', mediaUrl: null, createdAt, deletedAt: null, seenAt: null, replyToId, replyTo, reactions: [] });
   });
 
   socket.on('react', ({ messageId, emoji } = {}) => {
@@ -466,7 +587,7 @@ io.on('connection', socket => {
     setTimeout(() => {
       const ids = io.sockets.adapter.rooms.get(roomId) || new Set();
       const sameRoleStillOnline = [...ids].some(id => io.sockets.sockets.get(id)?.data?.role === role);
-      if (!sameRoleStillOnline) db.prepare('UPDATE profiles SET last_seen = ? WHERE room_id = ? AND role = ?').run(Date.now(), roomId, role);
+      if (!sameRoleStillOnline) db.prepare(`UPDATE profiles SET last_seen = ?, activity_status = CASE WHEN activity_status = 'typing' THEN NULL ELSE activity_status END WHERE room_id = ? AND role = ?`).run(Date.now(), roomId, role);
       emitPresence(roomId);
     }, 80);
   });

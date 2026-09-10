@@ -98,6 +98,9 @@ let profiles = { creator:{displayName:'You',avatarUrl:null}, guest:{displayName:
 let recorder=null, recordedChunks=[], recordTimer=null, recordStarted=0;
 let lastPresence={}, typingTimer=null, sentTyping=false, otherTyping=false;
 let homeRefreshTimer=null, homeRefreshBusy=false, lastHomeUnreadTotal=0, homeUnreadReady=false, lastContactsSignature='';
+let homeUnreadByRoom=new Map();
+let currentContactState={removed:false,removedBy:null,removedAt:null,removedByMe:false};
+let replyTarget=null;
 const storageKey=id=>`justtwo:${id}:auth`;
 const roleKey=id=>`justtwo:${id}:role`;
 const lastRoomKey='justtwo:lastRoom';
@@ -112,6 +115,95 @@ function forgetRoom(id){
   for(const key of Object.keys(localStorage)){if(key.startsWith(`justtwo:${id}:`)&&key!==storageKey(id)&&key!==roleKey(id))localStorage.removeItem(key);}
   if(localStorage.getItem(lastRoomKey)===id)localStorage.removeItem(lastRoomKey);
   setupContacts({notify:false});
+}
+
+async function removeContactForBoth(id, token, name='this chat'){
+  if(!confirm(`Remove ${name}? The other person will see that the chat was removed, but they can still send you a reach-out message. You can restore it later or permanently delete it.`))return;
+  try{
+    const r=await fetch(`/api/rooms/${encodeURIComponent(id)}/contact/remove`,{method:'POST',headers:{'x-chat-token':token}});
+    const data=await r.json();
+    if(!r.ok)return alert(data.error||'Could not remove this chat.');
+    showHomeNotice('Chat removed. You can restore it if they message you.');
+    setupContacts({notify:false});
+  }catch{alert('Could not remove this chat.');}
+}
+
+async function restoreContact(id, token){
+  try{
+    const r=await fetch(`/api/rooms/${encodeURIComponent(id)}/contact/restore`,{method:'POST',headers:{'x-chat-token':token}});
+    const data=await r.json();
+    if(!r.ok)return alert(data.error||'Could not restore this chat.');
+    currentContactState={removed:false,removedBy:null,removedAt:null,removedByMe:false};
+    applyContactRemovalState(currentContactState);
+    showHomeNotice('Chat restored ✓');
+    setupContacts({notify:false});
+  }catch{alert('Could not restore this chat.');}
+}
+
+async function deleteContactAnyway(id, token, name='this chat'){
+  if(!confirm(`Permanently delete ${name}? This removes the chat for both people and cannot be undone.`))return;
+  try{
+    const r=await fetch(`/api/rooms/${encodeURIComponent(id)}/contact`,{method:'DELETE',headers:{'x-chat-token':token}});
+    const data=await r.json();
+    if(!r.ok)return alert(data.error||'Could not permanently delete this chat.');
+    forgetRoom(id);
+    if(currentRoom===id){socket?.disconnect();currentRoom=null;authToken=null;myRole=null;await goHome(false);}
+    showHomeNotice('Chat permanently deleted.');
+  }catch{alert('Could not permanently delete this chat.');}
+}
+
+function ensureContactStateBanner(){
+  let banner=$('contactStateBanner');
+  if(banner)return banner;
+  banner=document.createElement('div');
+  banner.id='contactStateBanner';
+  banner.className='contactStateBanner hidden';
+  const chat=$('chat');
+  const messages=$('messages');
+  chat?.insertBefore(banner,messages);
+  return banner;
+}
+
+function setComposerLocked(locked){
+  const form=$('form');
+  if(!form)return;
+  form.classList.toggle('contactRemovedLocked',locked);
+  [...form.querySelectorAll('textarea,button,input')].forEach(el=>{el.disabled=locked;});
+  if(locked){setTyping(false);setEmojiTray(false);$('linkTray')?.classList.add('hidden');}
+}
+
+function applyContactRemovalState(state={}){
+  currentContactState={removed:false,removedBy:null,removedAt:null,removedByMe:false,...state};
+  const banner=ensureContactStateBanner();
+  if(!currentContactState.removed){
+    banner.classList.add('hidden');banner.replaceChildren();setComposerLocked(false);return;
+  }
+  const removedByMe=currentContactState.removedBy===myRole || currentContactState.removedByMe;
+  banner.classList.remove('hidden');
+  banner.classList.toggle('removedByMe',removedByMe);
+  banner.replaceChildren();
+
+  const copy=document.createElement('div');
+  copy.className='contactStateCopy';
+  const title=document.createElement('strong');
+  const text=document.createElement('span');
+  if(removedByMe){
+    title.textContent='You removed this chat';
+    text.textContent='You can still read new messages from them. Restore the chat to reply, or permanently delete it.';
+    setComposerLocked(true);
+  }else{
+    title.textContent='They removed this chat';
+    text.textContent='You can still send them a message if you want to reach out. They can read it and choose whether to restore the chat.';
+    setComposerLocked(false);
+  }
+  copy.append(title,text);banner.append(copy);
+
+  if(removedByMe){
+    const actions=document.createElement('div');actions.className='contactStateActions';
+    const restore=document.createElement('button');restore.type='button';restore.className='primary';restore.textContent='Restore chat';restore.onclick=()=>restoreContact(currentRoom,authToken);
+    const del=document.createElement('button');del.type='button';del.className='secondary dangerOutline';del.textContent='Delete anyway';del.onclick=()=>deleteContactAnyway(currentRoom,authToken,profiles[myRole==='creator'?'guest':'creator']?.displayName||'this chat');
+    actions.append(restore,del);banner.append(actions);
+  }
 }
 async function appHeartbeat(roomId,token){
   if(document.hidden||document.body.classList.contains('privacyLocked'))return;
@@ -262,12 +354,12 @@ function showGlobalMessageToast(title,body){
   el.innerHTML=`<strong>${escapeHtml(title)}</strong><span>${escapeHtml(body)}</span>`;
   el.classList.remove('hidden');clearTimeout(showGlobalMessageToast.timer);showGlobalMessageToast.timer=setTimeout(()=>el.classList.add('hidden'),3800);
 }
-async function showSystemNotification(title,body){
+async function showSystemNotification(title,body,roomId=currentRoom){
   if(!appearance.notifications||!('Notification' in window)||Notification.permission!=='granted')return false;
   try{
     const reg=await ensureServiceWorker();
-    if(reg?.showNotification){await reg.showNotification(title,{body,tag:`bloop-${currentRoom}`,icon:'/assets/bloop-icon.jpg',badge:'/assets/bloop-icon.jpg',data:{url:currentRoom?`/chat/${encodeURIComponent(currentRoom)}`:'/'}});return true;}
-    const n=new Notification(title,{body,tag:`bloop-${currentRoom}`});n.onclick=()=>{window.focus();n.close();};return true;
+    if(reg?.showNotification){await reg.showNotification(title,{body,tag:`bloop-${roomId||'home'}`,icon:'/assets/bloop-icon.jpg',badge:'/assets/bloop-icon.jpg',data:{url:roomId?`/chat/${encodeURIComponent(roomId)}`:'/'}});return true;}
+    const n=new Notification(title,{body,tag:`bloop-${roomId||'home'}`});n.onclick=()=>{window.focus();n.close();};return true;
   }catch{return false;}
 }
 async function notifyIncomingMessage(msg){
@@ -349,12 +441,21 @@ function refreshHeader(){
   setAvatar($('profileAvatar'),myRole);
   setAvatar($('setupAvatar'),myRole);
 }
+function setChatCode(code=''){
+  const wrap=$('chatCodeWrap'),el=$('chatCodeValue');
+  if(!wrap||!el)return;
+  el.textContent=code||'—';
+  wrap.classList.toggle('hidden',!code);
+}
 
 function contactPresence(data, role){
   const presence=data.presence||{};
   const activity=presence.activity?.[role] || data.profiles?.[role]?.activityStatus || null;
   if(activity==='emergency')return{label:'emergency button pressed',cls:'emergency'};
   if(activity==='blurred')return{label:'screen blurred',cls:'blurred'};
+  if(activity==='typing')return{label:'typing…',cls:'online'};
+  if(activity==='recording-audio')return{label:'recording audio…',cls:'busy'};
+  if(activity==='taking-photo')return{label:'taking a photo…',cls:'busy'};
   const online=new Set(presence.online||[]);
   if(online.has(role))return{label:'online',cls:'online'};
   const seen=presence.lastSeen?.[role] || data.profiles?.[role]?.lastSeen;
@@ -382,31 +483,53 @@ async function setupContacts({notify=false}={}){
       }
       const other=role==='creator'?'guest':'creator';const p=(data.profiles||{})[other]||{displayName:'Friend',avatarUrl:null,username:''};
       const unread=Number(data.unreadCount||0);const state=contactPresence(data,other);const visibleMessages=(data.messages||[]).filter(m=>!m.deletedAt);const last=visibleMessages.at(-1);const senderLabel=last?(last.sender===role?'You':(p.displayName||'Friend')):'';const preview=last?(last.type==='text'?(last.body||'Message').slice(0,55):last.type==='image'?'Photo':'Voice note'):'No messages yet';const sub=last?`${senderLabel}: ${preview}`:preview;
-      return{id,token,p,unread,state,sub};
+      return{id,token,p,unread,state,sub,last,contactState:data.contactState||{removed:false,removedBy:null,removedAt:null,removedByMe:false},role};
     }catch{return null;}
   }));
   const valid=results.filter(Boolean);const validIds=valid.map(x=>x.id);let totalUnread=valid.reduce((n,x)=>n+x.unread,0);let newestName=valid.find(x=>x.unread)?.p?.displayName||'Friend';
   if(validIds.length!==ids.length)localStorage.setItem(roomsKey,JSON.stringify(validIds));
-  const signature=JSON.stringify(valid.map(x=>[x.id,x.p.displayName,x.p.avatarUrl,x.p.username,x.unread,x.state.label,x.state.cls,x.sub]));
+  const signature=JSON.stringify(valid.map(x=>[x.id,x.p.displayName,x.p.avatarUrl,x.p.username,x.unread,x.state.label,x.state.cls,x.sub,x.contactState?.removed,x.contactState?.removedBy]));
   if(signature!==lastContactsSignature){
     const frag=document.createDocumentFragment();
-    valid.forEach(({id,p,unread,state,sub})=>{
+    valid.forEach(({id,p,unread,state,sub,last,contactState,role})=>{
       const card=document.createElement('div');card.className='contactCard';card.tabIndex=0;card.setAttribute('role','button');
       const imgWrap=document.createElement('span');imgWrap.className='contactAvatarWrap';
       const img=document.createElement('img');img.className='avatar continueAvatar';img.alt='';
       if(p.avatarUrl)img.src=p.avatarUrl;else{const initial=(p.displayName||'Friend').trim().charAt(0).toUpperCase()||'?';img.src=`data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="100%" height="100%" rx="48" fill="#23262b"/><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" fill="white" font-family="Arial" font-size="40" font-weight="700">${initial}</text></svg>`)}`;}
       const statusDot=document.createElement('span');statusDot.className=`presenceDot contactPresenceDot ${state.cls}`;imgWrap.append(img,statusDot);
-      const copy=document.createElement('span');copy.className='contactText';copy.innerHTML=`<span class="contactNameRow"><strong>${escapeHtml(p.displayName||'Friend')}</strong><span class="contactStatus ${state.cls}">${escapeHtml(state.label)}</span></span><small>${p.username?'@'+escapeHtml(p.username)+' · ':''}${escapeHtml(sub)}</small>`;
+      const removed=Boolean(contactState?.removed);const removedByMe=removed&&contactState.removedBy===role;
+      const copy=document.createElement('span');copy.className='contactText';
+      const removalLine=removed?(removedByMe?(unread?'They messaged you — restore or delete':'You removed this chat'):'They removed this chat · you can still message them'):sub;
+      copy.innerHTML=`<span class="contactNameRow"><strong>${escapeHtml(p.displayName||'Friend')}</strong><span class="contactStatus ${removed?'removed':state.cls}">${escapeHtml(removed?(removedByMe?'removed by you':'chat removed'):state.label)}</span></span><small>${p.username?'@'+escapeHtml(p.username)+' · ':''}${escapeHtml(removalLine)}</small>`;
+      card.classList.toggle('contactRemoved',removed);card.classList.toggle('contactRemovedByMe',removedByMe);
       const side=document.createElement('span');side.className='contactSide';if(unread){const badge=document.createElement('span');badge.className='unreadBadge';badge.textContent=unread===1?'1 new':`${unread} new`;side.append(badge);}
-      const remove=document.createElement('button');remove.type='button';remove.className='contactDelete';remove.title='Remove chat from this device';remove.setAttribute('aria-label','Remove chat from this device');remove.textContent='×';remove.onclick=e=>{e.stopPropagation();if(confirm(`Remove ${p.displayName||'this chat'} from this device? Messages on the server are not erased.`))forgetRoom(id);};side.append(remove);
-      const arrow=document.createElement('span');arrow.className='contactArrow';arrow.textContent='→';side.append(arrow);
+      if(removedByMe){
+        const restore=document.createElement('button');restore.type='button';restore.className='contactMiniAction restore';restore.textContent='Restore';restore.onclick=e=>{e.stopPropagation();restoreContact(id,localStorage.getItem(storageKey(id)));};side.append(restore);
+        const del=document.createElement('button');del.type='button';del.className='contactMiniAction delete';del.textContent='Delete';del.onclick=e=>{e.stopPropagation();deleteContactAnyway(id,localStorage.getItem(storageKey(id)),p.displayName||'this chat');};side.append(del);
+      }else{
+        const remove=document.createElement('button');remove.type='button';remove.className='contactDelete';remove.title='Remove chat';remove.setAttribute('aria-label','Remove chat');remove.textContent='×';remove.onclick=e=>{e.stopPropagation();removeContactForBoth(id,localStorage.getItem(storageKey(id)),p.displayName||'this chat');};side.append(remove);
+        const arrow=document.createElement('span');arrow.className='contactArrow';arrow.textContent='→';side.append(arrow);
+      }
       card.append(imgWrap,copy,side);card.onclick=()=>resumeRoom(id,true);card.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();resumeRoom(id,true);}};frag.append(card);
     });
     $('contactsList').replaceChildren(frag);lastContactsSignature=signature;
   }
   $('contactsCount').textContent=valid.length?`${valid.length} saved`:'';$('contactsWidget').classList.toggle('hidden',valid.length===0);
   document.title=totalUnread?`(${totalUnread}) Bloop`:'Bloop';
-  if(homeUnreadReady&&notify&&totalUnread>lastHomeUnreadTotal)showHomeNotice(`${totalUnread-lastHomeUnreadTotal} new message${totalUnread-lastHomeUnreadTotal===1?'':'s'} from ${newestName}`);
+  if(homeUnreadReady&&notify){
+    for(const item of valid){
+      const previous=homeUnreadByRoom.get(item.id)??0;
+      if(item.unread>previous){
+        const gained=item.unread-previous;
+        const body=item.last?(item.last.type==='text'?(item.last.body||'New message').slice(0,100):item.last.type==='image'?'Sent a photo':item.last.type==='audio'?'Sent a voice note':'Sent a message'):`${gained} new message${gained===1?'':'s'}`;
+        playTinyTing();
+        showGlobalMessageToast(item.p?.displayName||'Friend',body);
+        showHomeNotice(`${gained} new message${gained===1?'':'s'} from ${item.p?.displayName||'Friend'}`);
+        if(document.hidden) showSystemNotification(item.p?.displayName||'Friend',body,item.id);
+      }
+    }
+  }
+  homeUnreadByRoom=new Map(valid.map(x=>[x.id,x.unread]));
   lastHomeUnreadTotal=totalUnread;homeUnreadReady=true;homeRefreshBusy=false;
 }
 function startHomeRefresh(){clearInterval(homeRefreshTimer);homeRefreshTimer=setInterval(()=>{if(!$('landing').classList.contains('hidden'))setupContacts({notify:true});},2000);}
@@ -435,6 +558,7 @@ $('createBtn').onclick=async()=>{
   $('shareLink').value=`${location.origin}/?room=${encodeURIComponent(currentRoom)}&invite=${encodeURIComponent(data.shareToken)}`; if($('shareCode'))$('shareCode').value=data.joinCode||''; show('share'); history.pushState({view:'share'},'','/');
 };
 $('copyBtn').onclick=async()=>{await navigator.clipboard.writeText($('shareLink').value);$('copyBtn').textContent='Copied ✓';setTimeout(()=>$('copyBtn').textContent='Copy',1200);};
+$('chatCodeCopy')?.addEventListener('click',async()=>{const code=$('chatCodeValue')?.textContent?.trim();if(!code||code==='—')return;try{await navigator.clipboard.writeText(code);$('chatCodeCopy').textContent='Copied ✓';setTimeout(()=>$('chatCodeCopy').textContent='Copy',1100);}catch{}});
 $('copyCodeBtn')?.addEventListener('click',async()=>{const code=$('shareCode')?.value||'';if(!code)return;await navigator.clipboard.writeText(code);$('copyCodeBtn').textContent='Copied ✓';setTimeout(()=>$('copyCodeBtn').textContent='Copy code',1200);});
 function formatJoinCode(value){const raw=String(value||'').toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,8);return raw.length>4?`${raw.slice(0,4)}-${raw.slice(4)}`:raw;}
 $('joinCodeInput')?.addEventListener('input',e=>{e.target.value=formatJoinCode(e.target.value);$('joinCodeStatus').textContent='';});
@@ -478,7 +602,8 @@ async function openChat(pushHistory=true){
   stopHomeRefresh();
   if(!currentRoom||!authToken)return fail('Missing chat access.');
   const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/messages`,{headers:{'x-chat-token':authToken}});const data=await r.json();if(!r.ok)return fail(data.error||'Could not open chat.');
-  myRole=data.role;profiles=data.profiles||profiles;rememberRoom(currentRoom);await syncIdentityToRoom();refreshHeader();
+  myRole=data.role;profiles=data.profiles||profiles;currentContactState=data.contactState||{removed:false,removedBy:null,removedAt:null,removedByMe:false};rememberRoom(currentRoom);await syncIdentityToRoom();refreshHeader();setChatCode(data.joinCode||'');
+  applyContactRemovalState(currentContactState);
   const box=$('messages');box.innerHTML='';data.messages.forEach(addMessage);if(!data.messages.length)box.innerHTML='<div class="empty"><b>It’s quiet in here.</b><span>One of you has to start 😭</span></div>';
   show('chat');connectSocket();scrollBottom();
   if(pushHistory)history.pushState({view:'chat',roomId:currentRoom},'',`/chat/${encodeURIComponent(currentRoom)}`);else history.replaceState({view:'chat',roomId:currentRoom},'',`/chat/${encodeURIComponent(currentRoom)}`);
@@ -498,6 +623,10 @@ function connectSocket(){
   socket.on('seen',({messageIds,seenAt})=>{(messageIds||[]).forEach(id=>markSeen(id,seenAt));});
   socket.on('connect',()=>{socket.emit('seen');});
   socket.on('message-deleted',({messageId})=>markDeleted(messageId));
+  socket.on('contact-state',state=>{currentContactState={...state,removedByMe:state?.removedBy===myRole};applyContactRemovalState(currentContactState);if(!$('landing').classList.contains('hidden'))setupContacts({notify:false});});
+  socket.on('contact-deleted',()=>{const id=currentRoom;socket?.disconnect();if(id)forgetRoom(id);currentRoom=null;authToken=null;myRole=null;goHome(false).then(()=>showHomeNotice('That chat was permanently deleted.'));});
+  socket.on('send-blocked',()=>{applyContactRemovalState({...currentContactState,removed:true,removedBy:myRole,removedByMe:true});});
+
   socket.on('profile',data=>{profiles[data.role]={...(profiles[data.role]||{}),displayName:data.displayName,avatarUrl:data.avatarUrl,username:data.username||''};refreshHeader();document.querySelectorAll(`[data-sender="${data.role}"] .messageAvatar`).forEach(img=>setAvatar(img,data.role));});
   socket.on('invite-declined',()=>{if(myRole==='creator'&&currentRoom){const id=currentRoom;socket?.disconnect();forgetRoom(id);currentRoom=null;authToken=null;myRole=null;goHome(false).then(()=>showHomeNotice('They didn’t accept your invite, so the chat was removed.'));}});
   socket.on('emergency-lock',()=>showEmergencyLock());
@@ -556,22 +685,53 @@ $('privacyShield')?.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key==='
 $('privacyNowBtn')?.addEventListener('click',engagePrivacyShield);
 $('chatPrivacyBtn')?.addEventListener('click',engagePrivacyShield);
 
+function replyPreviewText(msg){
+  if(!msg)return '';
+  if(msg.deleted||msg.type==='deleted')return 'Deleted message';
+  if(msg.type==='image')return '📷 Photo';
+  if(msg.type==='audio')return '🎙 Voice note';
+  return String(msg.body||'Message').replace(/\s+/g,' ').slice(0,100);
+}
+function replySenderName(msg){
+  if(!msg)return 'Message';
+  if(msg.sender===myRole)return 'You';
+  return profiles[msg.sender]?.displayName||'Friend';
+}
+function cancelReply(){replyTarget=null;$('replyComposer')?.classList.add('hidden');$('replyComposerText').textContent='';$('replyComposerName').textContent='';}
+function startReply(msg){
+  if(!msg||msg.deletedAt)return;
+  replyTarget={id:Number(msg.id),sender:msg.sender,type:msg.type,body:msg.body||'',mediaUrl:msg.mediaUrl||null,deleted:false};
+  $('replyComposerName').textContent=`Replying to ${replySenderName(replyTarget)}`;
+  $('replyComposerText').textContent=replyPreviewText(replyTarget);
+  $('replyComposer').classList.remove('hidden');
+  $('input').focus();
+}
+function renderReplyReference(bubble,msg){
+  if(!msg.replyTo)return;
+  const ref=document.createElement('button');ref.type='button';ref.className='replyReference';
+  const name=document.createElement('strong');name.textContent=replySenderName(msg.replyTo);
+  const preview=document.createElement('span');preview.textContent=replyPreviewText(msg.replyTo);
+  ref.append(name,preview);
+  ref.onclick=()=>{const row=document.querySelector(`.messageRow[data-id="${msg.replyTo.id}"]`);if(row){row.scrollIntoView({behavior:'smooth',block:'center'});row.classList.add('replyFlash');setTimeout(()=>row.classList.remove('replyFlash'),900);}};
+  bubble.append(ref);
+}
 function renderMessageContent(bubble,msg){
   if(msg.type==='image'){const img=document.createElement('img');img.className='messageImage';img.src=msg.mediaUrl;img.alt='Shared image';img.loading='lazy';bubble.append(img);}
   else if(msg.type==='audio'){const audio=document.createElement('audio');audio.controls=true;audio.preload='metadata';audio.src=msg.mediaUrl;bubble.append(audio);}
   else {const text=document.createElement('span');text.textContent=msg.body;bubble.append(text);appendLinkPreview(bubble,msg.body);}
 }
 function addMessage(msg){
-  const row=document.createElement('div');row.className=`messageRow ${msg.sender===myRole?'mine':'theirs'}`;row.dataset.id=msg.id;row.dataset.sender=msg.sender;
+  const row=document.createElement('div');row.className=`messageRow ${msg.sender===myRole?'mine':'theirs'}`;row.dataset.id=msg.id;row.dataset.sender=msg.sender;row.dataset.type=msg.type||'text';row.dataset.body=msg.body||'';row.dataset.mediaUrl=msg.mediaUrl||'';
   if(msg.deletedAt)return;
   const avatar=document.createElement('img');avatar.className='avatar messageAvatar';avatar.alt='';setAvatar(avatar,msg.sender);
   const wrap=document.createElement('div');wrap.className='messageWrap';const bubble=document.createElement('div');bubble.className='msg';
+  renderReplyReference(bubble,msg);
   renderMessageContent(bubble,msg);
   const meta=document.createElement('div');meta.className='meta';
   const timeSpan=document.createElement('span');timeSpan.textContent=new Date(msg.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});meta.append(timeSpan);
   if(msg.sender===myRole&&!msg.deletedAt){const receipt=document.createElement('span');receipt.className='receipt';receipt.dataset.receiptFor=msg.id;receipt.textContent=msg.seenAt?'✓✓ seen':'✓ sent';meta.append(receipt);}
   const actions=document.createElement('div');actions.className='msgActions';
-  if(!msg.deletedAt){const react=document.createElement('button');react.type='button';react.title='React';react.textContent='♡';react.onclick=e=>openReactionMenu(e.currentTarget,msg.id);actions.append(react);if(msg.sender===myRole){const del=document.createElement('button');del.type='button';del.title='Delete';del.textContent='⌫';del.onclick=()=>{if(confirm('Delete this message? It will disappear from the chat.'))socket?.emit('delete-message',msg.id);};actions.append(del);}}
+  if(!msg.deletedAt){const reply=document.createElement('button');reply.type='button';reply.title='Reply';reply.textContent='↩';reply.onclick=()=>startReply(msg);actions.append(reply);const react=document.createElement('button');react.type='button';react.title='React';react.textContent='♡';react.onclick=e=>openReactionMenu(e.currentTarget,msg.id);actions.append(react);if(msg.sender===myRole){const del=document.createElement('button');del.type='button';del.title='Delete';del.textContent='⌫';del.onclick=()=>{if(confirm('Delete this message? It will disappear from the chat.'))socket?.emit('delete-message',msg.id);};actions.append(del);}}
   const reactionBar=document.createElement('div');reactionBar.className='reactions';wrap.append(actions,bubble,reactionBar,meta);row.append(avatar,wrap);$('messages').append(row);updateReactions(msg.id,msg.reactions||[]);
   if(msg.sender!==myRole&&!msg.deletedAt)attachLongPress(bubble,msg.id);
 }
@@ -587,7 +747,7 @@ function markDeleted(id){document.querySelector(`.messageRow[data-id="${id}"]`)?
 function updateReactions(id,reactions){const bar=document.querySelector(`.messageRow[data-id="${id}"] .reactions`);if(!bar)return;bar.innerHTML='';const groups=new Map();reactions.forEach(r=>groups.set(r.emoji,(groups.get(r.emoji)||0)+1));groups.forEach((count,emoji)=>{const b=document.createElement('button');b.type='button';b.textContent=`${emoji}${count>1?' '+count:''}`;b.onclick=()=>socket?.emit('react',{messageId:id,emoji});bar.append(b);});}
 function openReactionMenu(target,messageId,longPress=false){
   document.querySelector('.reactionMenu')?.remove();const menu=document.createElement('div');menu.className=`reactionMenu${longPress?' reactionMenuLong':''}`;
-  const head=document.createElement('div');head.className='reactionHead';head.innerHTML='<strong>React</strong><button type="button">×</button>';head.querySelector('button').onclick=()=>menu.remove();menu.append(head);
+  const head=document.createElement('div');head.className='reactionHead';head.innerHTML='<strong>Message</strong><span><button type="button" class="replyMenuBtn">Reply</button><button type="button" class="closeReactionBtn">×</button></span>';head.querySelector('.replyMenuBtn').onclick=()=>{const row=document.querySelector(`.messageRow[data-id="${messageId}"]`);const cached=row?{id:Number(messageId),sender:row.dataset.sender,type:row.dataset.type||'text',body:row.dataset.body||'',mediaUrl:row.dataset.mediaUrl||null}:null;if(cached)startReply(cached);menu.remove();};head.querySelector('.closeReactionBtn').onclick=()=>menu.remove();menu.append(head);
   const grid=document.createElement('div');grid.className='reactionGrid';reactionChoices.forEach(emoji=>{const b=document.createElement('button');b.type='button';b.textContent=emoji;b.onclick=e=>{e.stopPropagation();socket?.emit('react',{messageId,emoji});reactionBurst(emoji);menu.remove();};grid.append(b);});menu.append(grid);
   document.body.append(menu);const rect=target.getBoundingClientRect();const width=Math.min(390,window.innerWidth-20);menu.style.width=`${width}px`;menu.style.left=`${Math.max(10,Math.min(window.innerWidth-width-10,rect.left+rect.width/2-width/2))}px`;menu.style.top=`${Math.max(10,Math.min(window.innerHeight-330,rect.top-90))}px`;
   setTimeout(()=>document.addEventListener('pointerdown',e=>{if(!menu.contains(e.target))menu.remove();},{once:true}),0);
@@ -621,9 +781,10 @@ function syncVisualViewport(){
 window.visualViewport?.addEventListener('resize',syncVisualViewport);window.visualViewport?.addEventListener('scroll',syncVisualViewport);window.addEventListener('resize',syncVisualViewport);syncVisualViewport();
 $('linkBtn').onclick=()=>{$('linkTray').classList.toggle('hidden');if(!$('linkTray').classList.contains('hidden'))$('linkInput').focus();};
 $('closeLinkTray').onclick=()=>{$('linkTray').classList.add('hidden');$('linkInput').value='';};
-$('sendLinkBtn').onclick=()=>{const value=$('linkInput').value.trim();if(!value||!socket?.connected)return;try{const u=new URL(value);const h=u.hostname.replace(/^www\./,'');if(!(h==='youtu.be'||h.endsWith('youtube.com')||h==='pin.it'||h.endsWith('pinterest.com')))return alert('Paste a YouTube or Pinterest link.');}catch{return alert('That link does not look valid.');}socket.emit('message',value);$('linkInput').value='';$('linkTray').classList.add('hidden');};
+$('sendLinkBtn').onclick=()=>{const value=$('linkInput').value.trim();if(!value||!socket?.connected)return;try{const u=new URL(value);const h=u.hostname.replace(/^www\./,'');if(!(h==='youtu.be'||h.endsWith('youtube.com')||h==='pin.it'||h.endsWith('pinterest.com')))return alert('Paste a YouTube or Pinterest link.');}catch{return alert('That link does not look valid.');}socket.emit('message',{body:value,replyToId:replyTarget?.id||null});cancelReply();$('linkInput').value='';$('linkTray').classList.add('hidden');};
 
-$('form').addEventListener('submit',e=>{e.preventDefault();const value=$('input').value.trim();if(!value||!socket?.connected)return;setTyping(false);socket.emit('message',value);$('input').value='';$('input').style.height='auto';setEmojiTray(false);});
+$('cancelReply')?.addEventListener('click',cancelReply);
+$('form').addEventListener('submit',e=>{e.preventDefault();const value=$('input').value.trim();if(!value||!socket?.connected)return;setTyping(false);socket.emit('message',{body:value,replyToId:replyTarget?.id||null});cancelReply();$('input').value='';$('input').style.height='auto';setEmojiTray(false);});
 $('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('form').requestSubmit();}});
 $('input').addEventListener('input',e=>{e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,96)+'px';setTyping(Boolean(e.target.value.trim()));});$('input').addEventListener('focus',()=>{document.body.classList.toggle('ipadComposerSide',isTabletLandscape());setTimeout(syncVisualViewport,80);});$('input').addEventListener('blur',()=>{setTyping(false);document.body.classList.remove('ipadKeyboardOpen','ipadComposerSide');});
 $('imageBtn').onclick=()=>$('imageInput').click();$('imageInput').onchange=async()=>{const file=$('imageInput').files[0];if(file)await uploadMedia('image',file);$('imageInput').value='';};
@@ -631,7 +792,7 @@ let cameraActivityOpen=false;
 $('cameraBtn').onclick=async()=>{cameraActivityOpen=true;await setCurrentChatActivity('taking-photo');$('cameraInput').click();};
 $('cameraInput').onchange=async()=>{try{const file=$('cameraInput').files[0];if(file)await uploadMedia('image',file);}finally{$('cameraInput').value='';cameraActivityOpen=false;await setCurrentChatActivity('active');}};
 window.addEventListener('focus',()=>{if(!cameraActivityOpen)return;setTimeout(()=>{if(cameraActivityOpen){cameraActivityOpen=false;setCurrentChatActivity('active');}},600);});
-async function uploadMedia(kind,blob){const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/upload/${kind}`,{method:'POST',headers:{'x-chat-token':authToken,'content-type':blob.type||'application/octet-stream'},body:blob});const data=await r.json().catch(()=>({}));if(!r.ok)alert(data.error||'Upload failed.');return data;}
+async function uploadMedia(kind,blob){const headers={'x-chat-token':authToken,'content-type':blob.type||'application/octet-stream'};if(replyTarget?.id)headers['x-reply-to']=String(replyTarget.id);const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/upload/${kind}`,{method:'POST',headers,body:blob});const data=await r.json().catch(()=>({}));if(!r.ok)alert(data.error||'Upload failed.');else cancelReply();return data;}
 $('voiceBtn').onclick=async()=>{if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)return alert('Voice recording is not supported in this browser.');try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});recordedChunks=[];const preferred=['audio/webm;codecs=opus','audio/mp4'].find(t=>MediaRecorder.isTypeSupported(t));recorder=new MediaRecorder(stream,preferred?{mimeType:preferred}:undefined);recorder.ondataavailable=e=>{if(e.data.size)recordedChunks.push(e.data);};recorder.onstop=()=>stream.getTracks().forEach(t=>t.stop());recorder.start();await setCurrentChatActivity('recording-audio');recordStarted=Date.now();$('recordTime').textContent='Recording 0:00';$('recordingBar').classList.remove('hidden');$('form').classList.add('recording');recordTimer=setInterval(()=>{const s=Math.floor((Date.now()-recordStarted)/1000);$('recordTime').textContent=`Recording ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;},250);}catch{setCurrentChatActivity('active');alert('Microphone permission is needed for voice notes.');}};
 function stopRecording(){if(recorder&&recorder.state!=='inactive')recorder.stop();clearInterval(recordTimer);$('recordingBar').classList.add('hidden');$('form').classList.remove('recording');setCurrentChatActivity('active');}
 $('cancelRecord').onclick=()=>{stopRecording();recordedChunks=[];};$('sendRecord').onclick=async()=>{if(!recorder)return;const type=recorder.mimeType||'audio/webm';stopRecording();await new Promise(r=>setTimeout(r,80));const blob=new Blob(recordedChunks,{type});recordedChunks=[];if(blob.size)await uploadMedia('audio',blob);};
