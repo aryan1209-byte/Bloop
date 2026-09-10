@@ -663,3 +663,47 @@ body{position:relative!important;isolation:isolate!important;background:none!imp
 .swipeReplyCue{position:absolute;top:50%;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;opacity:0;background:rgba(124,92,255,.2);border:1px solid rgba(170,150,255,.35);color:#c9bcff;font-weight:900;pointer-events:none;transform:translateY(-50%) scale(.8)}
 .messageRow.mine .swipeReplyCue{right:-38px}.messageRow.theirs .swipeReplyCue{left:-38px}
 .messageRow.swipeReplyReady .swipeReplyCue{opacity:1;transform:translateY(-50%) scale(1)}
+
+/* v28 mobile repair + working swipe reply + manual presence refresh */
+.refreshStatusBtn.spinning{animation:bloopSpin .35s linear}
+@keyframes bloopSpin{to{transform:rotate(360deg)}}
+.messageRow{position:relative}
+.messageRow.swipingReply{transition:none!important;will-change:transform;touch-action:pan-y}
+.messageRow.replySnapBack{transition:transform .18s cubic-bezier(.2,.8,.2,1)!important}
+.swipeReplyCue{position:absolute!important;left:-37px!important;right:auto!important;top:50%!important;width:29px!important;height:29px!important;border-radius:999px!important;display:grid!important;place-items:center!important;opacity:0;background:rgba(124,92,255,.23)!important;border:1px solid rgba(190,177,255,.36)!important;color:#d8ceff!important;font-size:16px!important;font-weight:900!important;transform:translateY(-50%) scale(.78);pointer-events:none!important;transition:opacity .08s,transform .08s}
+.messageRow.swipeReplyReady .swipeReplyCue{opacity:1;transform:translateY(-50%) scale(1)}
+.msgActions button{-webkit-appearance:none!important;appearance:none!important;background:rgba(15,24,39,.94)!important;color:#eef4ff!important;border:1px solid rgba(255,255,255,.14)!important;box-shadow:0 5px 16px rgba(0,0,0,.22)!important}
+
+@media(max-width:650px){
+  html,body{width:100%!important;max-width:100%!important;overflow-x:hidden!important}
+  .shell{width:100%!important;max-width:100%!important;padding:0!important;margin:0!important}
+  .bloopBrandBadge{display:none!important}
+  .chat{width:100%!important;max-width:none!important;height:100dvh!important;min-height:100dvh!important;border:0!important;border-radius:0!important;margin:0!important;box-shadow:none!important}
+  .topbar{min-height:auto!important;padding:8px 8px 7px!important;gap:7px!important;display:flex!important;flex-wrap:wrap!important;align-items:center!important}
+  .backIcon{flex:0 0 36px!important}
+  .chatIdentity{min-width:0!important;flex:1 1 auto!important;gap:7px!important}
+  .partnerAvatar{width:36px!important;height:36px!important;flex:0 0 36px!important}
+  .partnerText{min-width:0!important;flex:1!important}
+  .partnerText strong{max-width:100%!important;font-size:13px!important}
+  .presence{font-size:10px!important}
+  .topActions{margin-left:auto!important;gap:4px!important;flex:0 0 auto!important}
+  .topActions .iconBtn{width:32px!important;height:32px!important;border-radius:10px!important;font-size:13px!important}
+  .chatClock{display:none!important}
+  .chatCodePill{order:5!important;flex:1 0 100%!important;width:100%!important;margin:0!important;justify-content:space-between!important;border-radius:11px!important;padding:4px 5px 4px 9px!important}
+  .messages{padding:12px 10px 12px!important}
+  .messageRow{max-width:96%!important}
+  .messageAvatar{width:25px!important;height:25px!important}
+  .msg{max-width:82vw!important;overflow-wrap:anywhere!important}
+  .messageImage{max-width:72vw!important;height:auto!important}
+  .msg audio{max-width:72vw!important}
+  .msgActions{display:flex!important;opacity:.76!important;gap:4px!important;margin-bottom:3px!important}
+  .msgActions button{width:29px!important;height:27px!important;min-width:29px!important;padding:0!important;border-radius:9px!important;font-size:13px!important}
+  .composer{width:100%!important;display:flex!important;flex-wrap:wrap!important;align-items:center!important;gap:5px!important;padding:7px max(7px,env(safe-area-inset-right)) max(7px,env(safe-area-inset-bottom)) max(7px,env(safe-area-inset-left))!important}
+  .composer #input{order:1!important;flex:1 0 100%!important;width:100%!important;min-width:0!important;min-height:39px!important;max-height:92px!important;margin:0!important}
+  .composer .toolBtn,.composer .send{order:2!important;width:34px!important;height:34px!important;flex:0 0 34px!important}
+  .composer .send{margin-left:auto!important}
+  .replyComposer{width:calc(100% - 14px)!important;margin:0 7px!important;padding:7px 9px!important;border-radius:12px 12px 0 0!important}
+  .replyComposer span{max-width:78vw!important}
+  .emojiTray{left:7px!important;right:7px!important;bottom:92px!important;max-height:45dvh!important}
+  .linkTray{left:7px!important;right:7px!important;bottom:92px!important}
+}

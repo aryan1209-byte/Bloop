@@ -684,6 +684,18 @@ $('privacyShield')?.addEventListener('pointerup',e=>{if(e.pointerType!=='mouse')
 $('privacyShield')?.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();shieldTap();}});
 $('privacyNowBtn')?.addEventListener('click',engagePrivacyShield);
 $('chatPrivacyBtn')?.addEventListener('click',engagePrivacyShield);
+$('refreshStatusBtn')?.addEventListener('click',async()=>{
+  if(!currentRoom||!authToken)return;
+  const btn=$('refreshStatusBtn');btn?.classList.add('spinning');
+  try{
+    await sendHeartbeat?.('active');
+    const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/messages`,{headers:{'x-chat-token':authToken},cache:'no-store'});
+    const data=await r.json();
+    if(r.ok){profiles=data.profiles||profiles;lastPresence=data.presence||lastPresence;refreshHeader();updatePresence(lastPresence);}
+  }catch{}
+  setTimeout(()=>btn?.classList.remove('spinning'),350);
+});
+
 
 function replyPreviewText(msg){
   if(!msg)return '';
@@ -721,7 +733,7 @@ function renderMessageContent(bubble,msg){
   else {const text=document.createElement('span');text.textContent=msg.body;bubble.append(text);appendLinkPreview(bubble,msg.body);}
 }
 function addMessage(msg){
-  const row=document.createElement('div');row.className=`messageRow ${msg.sender===myRole?'mine':'theirs'}`;row.dataset.id=msg.id;row.dataset.sender=msg.sender;row.dataset.type=msg.type||'text';row.dataset.body=msg.body||'';row.dataset.mediaUrl=msg.mediaUrl||'';
+  const row=document.createElement('div');row.className=`messageRow ${msg.sender===myRole?'mine':'theirs'}`;row.dataset.id=msg.id;row.dataset.sender=msg.sender;row.dataset.type=msg.type||'text';row.dataset.body=msg.body||'';row.dataset.mediaUrl=msg.mediaUrl||'';row.dataset.deleted=msg.deletedAt?'1':'0';
   if(msg.deletedAt)return;
   const avatar=document.createElement('img');avatar.className='avatar messageAvatar';avatar.alt='';setAvatar(avatar,msg.sender);
   const wrap=document.createElement('div');wrap.className='messageWrap';const bubble=document.createElement('div');bubble.className='msg';
@@ -731,7 +743,7 @@ function addMessage(msg){
   const timeSpan=document.createElement('span');timeSpan.textContent=new Date(msg.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});meta.append(timeSpan);
   if(msg.sender===myRole&&!msg.deletedAt){const receipt=document.createElement('span');receipt.className='receipt';receipt.dataset.receiptFor=msg.id;receipt.textContent=msg.seenAt?'✓✓ seen':'✓ sent';meta.append(receipt);}
   const actions=document.createElement('div');actions.className='msgActions';
-  if(!msg.deletedAt){const reply=document.createElement('button');reply.type='button';reply.title='Reply';reply.textContent='↩';reply.onclick=()=>startReply(msg);actions.append(reply);const react=document.createElement('button');react.type='button';react.title='React';react.textContent='♡';react.onclick=e=>openReactionMenu(e.currentTarget,msg.id);actions.append(react);if(msg.sender===myRole){const del=document.createElement('button');del.type='button';del.title='Delete';del.textContent='⌫';del.onclick=()=>{if(confirm('Delete this message? It will disappear from the chat.'))socket?.emit('delete-message',msg.id);};actions.append(del);}}
+  if(!msg.deletedAt){const reply=document.createElement('button');reply.type='button';reply.className='messageReplyBtn';reply.title='Reply';reply.setAttribute('aria-label','Reply to message');reply.textContent='↩';reply.onclick=()=>startReply(msg);actions.append(reply);const react=document.createElement('button');react.type='button';react.title='React';react.textContent='♡';react.onclick=e=>openReactionMenu(e.currentTarget,msg.id);actions.append(react);if(msg.sender===myRole){const del=document.createElement('button');del.type='button';del.title='Delete';del.textContent='⌫';del.onclick=()=>{if(confirm('Delete this message? It will disappear from the chat.'))socket?.emit('delete-message',msg.id);};actions.append(del);}}
   const reactionBar=document.createElement('div');reactionBar.className='reactions';wrap.append(actions,bubble,reactionBar,meta);row.append(avatar,wrap);$('messages').append(row);updateReactions(msg.id,msg.reactions||[]);
   if(msg.sender!==myRole&&!msg.deletedAt)attachLongPress(bubble,msg.id);
 }
@@ -863,13 +875,61 @@ async function boot(){
 boot();
 
 
+
+
+
 function installSwipeToReply(){
- const box=$('messages');if(!box||box.dataset.swipeReplyReady)return;box.dataset.swipeReplyReady='1';
- let row=null,sx=0,sy=0,axis=null;
- const reset=(fire=false)=>{if(!row)return;const r=row;r.classList.remove('swipingReply','swipeReplyReady');r.classList.add('replySnapBack');r.style.transform='';setTimeout(()=>r.classList.remove('replySnapBack'),190);if(fire)r.querySelector('.messageReplyBtn,[data-reply],.replyAction')?.click();row=null;axis=null};
- box.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;if(e.target.closest('button,a,input,textarea,audio'))return;row=e.target.closest('.messageRow');if(!row)return;sx=e.clientX;sy=e.clientY;axis=null;if(!row.querySelector('.swipeReplyCue')){const q=document.createElement('span');q.className='swipeReplyCue';q.textContent='↩';row.append(q)}},{passive:true});
- box.addEventListener('pointermove',e=>{if(!row)return;const dx=e.clientX-sx,dy=e.clientY-sy;if(!axis&&Math.max(Math.abs(dx),Math.abs(dy))>7)axis=Math.abs(dx)>Math.abs(dy)?'x':'y';if(axis==='y'){reset();return}if(axis!=='x')return;const mine=row.classList.contains('mine'),d=mine?-dx:dx;if(d<=0){row.style.transform='';return}const drag=Math.min(82,d*.72);row.classList.add('swipingReply');row.style.transform=`translateX(${mine?-drag:drag}px)`;row.classList.toggle('swipeReplyReady',d>=58)},{passive:true});
- box.addEventListener('pointerup',e=>{if(!row)return;const mine=row.classList.contains('mine'),d=mine?-(e.clientX-sx):(e.clientX-sx);reset(axis==='x'&&d>=58)},{passive:true});
- box.addEventListener('pointercancel',()=>reset(),{passive:true});
+  const box=$('messages');
+  if(!box||box.dataset.swipeReplyReady==='1')return;
+  box.dataset.swipeReplyReady='1';
+  let row=null,startX=0,startY=0,axis=null;
+  const threshold=52,maxDrag=76;
+  const messageFromRow=r=>({
+    id:Number(r.dataset.id),sender:r.dataset.sender,type:r.dataset.type||'text',
+    body:r.dataset.body||'',mediaUrl:r.dataset.mediaUrl||null,
+    deletedAt:r.dataset.deleted==='1'?Date.now():null
+  });
+  function finish(doReply=false){
+    if(!row)return;
+    const target=row;
+    target.classList.remove('swipingReply','swipeReplyReady');
+    target.classList.add('replySnapBack');
+    target.style.transform='';
+    setTimeout(()=>target.classList.remove('replySnapBack'),190);
+    if(doReply){
+      const msg=messageFromRow(target);
+      if(msg.id&&!msg.deletedAt){navigator.vibrate?.(12);startReply(msg);}
+    }
+    row=null;axis=null;
+  }
+  box.addEventListener('pointerdown',e=>{
+    if(e.pointerType==='mouse'&&e.button!==0)return;
+    if(e.target.closest('button,a,input,textarea,audio,video'))return;
+    row=e.target.closest('.messageRow');
+    if(!row)return;
+    startX=e.clientX;startY=e.clientY;axis=null;
+    if(!row.querySelector('.swipeReplyCue')){
+      const cue=document.createElement('span');cue.className='swipeReplyCue';cue.textContent='↩';row.append(cue);
+    }
+  },{passive:true});
+  box.addEventListener('pointermove',e=>{
+    if(!row)return;
+    const dx=e.clientX-startX,dy=e.clientY-startY;
+    if(!axis&&Math.max(Math.abs(dx),Math.abs(dy))>7)axis=Math.abs(dx)>Math.abs(dy)?'x':'y';
+    if(axis==='y'){finish(false);return;}
+    if(axis!=='x')return;
+    const distance=Math.max(0,dx);
+    if(distance<=0){row.style.transform='';row.classList.remove('swipeReplyReady');return;}
+    const drag=Math.min(maxDrag,distance*.72);
+    row.classList.add('swipingReply');
+    row.style.transform=`translateX(${drag}px)`;
+    row.classList.toggle('swipeReplyReady',distance>=threshold);
+  },{passive:true});
+  box.addEventListener('pointerup',e=>{
+    if(!row)return;
+    finish(axis==='x'&&(e.clientX-startX)>=threshold);
+  },{passive:true});
+  box.addEventListener('pointercancel',()=>finish(false),{passive:true});
 }
 installSwipeToReply();
+
