@@ -170,7 +170,7 @@ function serializeMessages(roomId) {
     if (!byId.has(r.messageId)) byId.set(r.messageId, []);
     byId.get(r.messageId).push({ role: r.role, emoji: r.emoji });
   }
-  return rows.map(m => ({ ...m, reactions: byId.get(m.id) || [] }));
+  return rows.map(m => ({ ...m, body: m.deletedAt ? '' : m.body, mediaUrl: m.deletedAt ? null : m.mediaUrl, reactions: byId.get(m.id) || [] }));
 }
 
 

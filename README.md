@@ -1,10 +1,21 @@
-# Just Two v9
+# Bloop
 
-Changes in this build:
-- Preserves the supplied index.html exactly.
-- Removes all character images and generated character artwork from JJK/KNY themes.
-- Fixes contact-list flicker by rendering updates atomically and only when data changes.
-- Adds app-wide presence heartbeat: online anywhere in Just Two, last seen after leaving the app.
-- Adds a temporary per-chat remove button on Home (removes access from this browser only; server messages are not erased).
-- Adds extra top spacing so the first message is not clipped.
-- Polishes the Just Two home logo using CSS only.
+Bloop is a lightweight private messaging web app built with Node.js, Express, Socket.IO, and SQLite.
+
+## Current build notes
+- App/package name is Bloop / `bloop-chat`.
+- Preserves existing SQLite chat data.
+- Supports invite acceptance/decline state.
+- Includes app-wide presence heartbeat and fast last-seen updates.
+- Supports text messages, images, camera uploads, voice notes, reactions, typing status, profiles, unread counts, seen receipts, and message deletion.
+- Supports activity states including recording audio and taking a photo.
+- Uses persistent storage through `DATA_DIR` (Railway uses `/data`).
+- SQLite runs in WAL mode with periodic backups.
+
+## Run locally
+```bash
+npm install
+npm start
+```
+
+Then open `http://localhost:3000`.

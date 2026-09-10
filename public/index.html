@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0c0e13" />
-  <title>Just Two</title>
+  <title>Bloop</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -17,7 +17,7 @@
 
   <section id="onboarding" class="onboarding hidden" aria-live="polite" aria-modal="true" role="dialog">
     <div class="onboardingPanel compactManual">
-      <div class="manualTop"><button id="manualStartOver" class="manualBack hidden" type="button">↶ First step</button><span class="manualEyebrow">JUST TWO</span><span id="manualStepLabel">1 of 3</span></div>
+      <div class="manualTop"><button id="manualStartOver" class="manualBack hidden" type="button">↶ First step</button><span class="manualEyebrow">BLOOP</span><span id="manualStepLabel">1 of 3</span></div>
       <div class="onboardingProgress"><span id="onboardingProgress"></span></div>
       <div class="onboardingStep" data-step="0"><div class="onboardingIcon">✦</div><h2>Welcome.</h2><p>Make sure that nobody nearby can read your screen.</p><button class="primary full onboardingNext" type="button">I’m ready</button></div>
       <div class="onboardingStep hidden" data-step="1"><div class="onboardingIcon">↗</div><h2>Invite a person.</h2><p>Create a chat, send the invite, and they choose whether to accept.</p><div class="manualNav"><button class="secondary onboardingBack" type="button">← Back</button><button class="primary onboardingNext" type="button">Next</button></div></div>
@@ -28,7 +28,7 @@
   <section id="lockScreen" class="lockScreen hidden" aria-live="assertive">
     <div class="lockPanel">
       <div class="lockIcon">■</div>
-      <h1>Just Two is locked</h1>
+      <h1>Bloop is locked</h1>
       <form id="unlockForm">
         <input id="unlockPassword" type="password" autocomplete="current-password" placeholder="Password" aria-label="Emergency unlock password" />
         <button class="primary full">Unlock</button>
@@ -43,14 +43,14 @@
         <div class="logo">✦</div>
         <div>
           <span class="eyebrow">HOME</span>
-          <h1>Just Two</h1>
+          <h1>Bloop</h1>
         </div>
       </div>
       <p class="homeLead">Your private corner for messages, photos, voice notes and much more!</p>
 
       <div id="inviteCard" class="inviteCard hidden">
         <div class="inviteIcon">↘</div>
-        <div class="inviteCopy"><span>Private invite</span><strong>Someone invited you to Just Two.</strong><small>You only join if you accept. (But I'd accept that if I were you)</small></div>
+        <div class="inviteCopy"><span>Private invite</span><strong>Someone invited you to Bloop.</strong><small>You only join if you accept. (But I'd accept that if I were you)</small></div>
         <div class="inviteActions"><button id="declineInviteBtn" class="secondary" type="button">Not now</button><button id="acceptInviteBtn" class="primary" type="button">Accept & join</button></div>
       </div>
 
@@ -100,6 +100,13 @@
   </div>
 </section>
 
+<section class="homeWidget quickReturnWidget">
+  <div class="widgetHeading"><div><span class="eyebrow">QUICK RETURN</span><h2>Bookmark Bloop</h2></div></div>
+  <p class="muted">Save Bloop so you can jump straight back after using the quick exit.</p>
+  <button id="bookmarkBtn" class="secondary" type="button">Bookmark / Add to Home Screen</button>
+  <small id="bookmarkHint" class="bookmarkHint muted"></small>
+</section>
+
 <section>
    <div class="emergency-hint">
      <span class="eyebrow">EMERGENCY</span>
@@ -133,7 +140,6 @@
 
       <div id="messages" class="messages" aria-live="polite"></div>
       <div id="themeMascot" class="themeMascot hidden" aria-hidden="true"></div>
-      <button id="deletedTorch" class="deletedTorch" type="button" aria-label="Hold and drag to reveal deleted messages" aria-pressed="false" title="Hold to reveal deleted messages">🔦</button>
       <div id="typingBubble" class="typingBubble hidden" aria-label="Friend is typing"><span></span><span></span><span></span></div>
 
       <form id="form" class="composer">
@@ -165,6 +171,7 @@
       <div class="dialogSection"><span class="dialogLabel">My bubble colour</span><div id="dialogColorChoices" class="colorChoices"></div></div>
       <div class="dialogSection"><label class="idleSetting">Auto-blur after inactivity<select id="dialogIdleBlurSelect" aria-label="Auto blur after inactivity"><option value="0">Off</option><option value="1">1 minute</option><option value="2">2 minutes</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option></select></label></div>
       <div class="dialogSection alertSettings"><label class="switchRow"><span>Message notifications</span><input id="dialogNotificationToggle" type="checkbox"><i></i></label><label class="switchRow"><span>Tiny message sound</span><input id="dialogSoundToggle" type="checkbox" checked><i></i></label></div>
+      <div class="dialogSection"><button type="button" id="dialogBookmarkBtn" class="secondary full">Bookmark Bloop</button></div>
       <button type="button" id="saveProfile" class="primary full">Save</button>
     </form>
   </dialog>
@@ -179,6 +186,7 @@
       <div class="dialogSection"><span class="dialogLabel">Your message colour</span><div id="setupColorChoices" class="colorChoices"></div></div>
       <div class="dialogSection"><label class="idleSetting">Auto-blur after inactivity<select id="setupIdleBlurSelect" aria-label="Auto blur after inactivity"><option value="0">Off</option><option value="1">1 minute</option><option value="2">2 minutes</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option></select></label></div>
       <div class="dialogSection alertSettings"><label class="switchRow"><span>Message notifications</span><input id="setupNotificationToggle" type="checkbox"><i></i></label><label class="switchRow"><span>Tiny message sound</span><input id="setupSoundToggle" type="checkbox" checked><i></i></label></div>
+      <div class="dialogSection"><button type="button" id="setupBookmarkBtn" class="secondary full">Bookmark Bloop</button></div>
       <button type="button" id="finishSetup" class="primary full">Save & enter chat</button>
       <button type="button" id="skipSetup" class="textBtn full">Skip for now</button>
     </form>

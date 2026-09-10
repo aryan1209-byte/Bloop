@@ -352,7 +352,7 @@ async function setupContacts({notify=false}={}){
     $('contactsList').replaceChildren(frag);lastContactsSignature=signature;
   }
   $('contactsCount').textContent=valid.length?`${valid.length} saved`:'';$('contactsWidget').classList.toggle('hidden',valid.length===0);
-  document.title=totalUnread?`(${totalUnread}) Just Two`:'Just Two';
+  document.title=totalUnread?`(${totalUnread}) Bloop`:'Bloop';
   if(homeUnreadReady&&notify&&totalUnread>lastHomeUnreadTotal)showHomeNotice(`${totalUnread-lastHomeUnreadTotal} new message${totalUnread-lastHomeUnreadTotal===1?'':'s'} from ${newestName}`);
   lastHomeUnreadTotal=totalUnread;homeUnreadReady=true;homeRefreshBusy=false;
 }
@@ -494,17 +494,11 @@ function renderMessageContent(bubble,msg){
 }
 function addMessage(msg){
   const row=document.createElement('div');row.className=`messageRow ${msg.sender===myRole?'mine':'theirs'}`;row.dataset.id=msg.id;row.dataset.sender=msg.sender;
-  if(msg.deletedAt){
-    // Deleted messages disappear normally. The other person's deleted messages can
-    // only be viewed while the on-screen torch is actively held/dragged.
-    if(msg.sender===myRole)return;
-    row.classList.add('deletedHidden');
-  }
+  if(msg.deletedAt)return;
   const avatar=document.createElement('img');avatar.className='avatar messageAvatar';avatar.alt='';setAvatar(avatar,msg.sender);
   const wrap=document.createElement('div');wrap.className='messageWrap';const bubble=document.createElement('div');bubble.className='msg';
   renderMessageContent(bubble,msg);
   const meta=document.createElement('div');meta.className='meta';
-  if(msg.deletedAt){const who=profiles[msg.sender]?.displayName||'Friend';const deletedLabel=document.createElement('span');deletedLabel.className='deletedRevealLabel';deletedLabel.textContent=`deleted by ${who} · `;meta.append(deletedLabel);}
   const timeSpan=document.createElement('span');timeSpan.textContent=new Date(msg.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});meta.append(timeSpan);
   if(msg.sender===myRole&&!msg.deletedAt){const receipt=document.createElement('span');receipt.className='receipt';receipt.dataset.receiptFor=msg.id;receipt.textContent=msg.seenAt?'✓✓ seen':'✓ sent';meta.append(receipt);}
   const actions=document.createElement('div');actions.className='msgActions';
@@ -520,7 +514,7 @@ function attachLongPress(target,messageId){
   target.addEventListener('contextmenu',e=>{e.preventDefault();openReactionMenu(target,messageId,true);});
 }
 function markSeen(id,seenAt){const r=document.querySelector(`[data-receipt-for="${id}"]`);if(r){r.textContent='✓✓ seen';r.classList.add('seen');}}
-function markDeleted(id){const row=document.querySelector(`.messageRow[data-id="${id}"]`);if(!row)return;if(row.dataset.sender===myRole){row.remove();return;}row.classList.add('deletedHidden');row.querySelector('.msgActions')?.replaceChildren();row.querySelector('.reactions')?.replaceChildren();}
+function markDeleted(id){document.querySelector(`.messageRow[data-id="${id}"]`)?.remove();}
 function updateReactions(id,reactions){const bar=document.querySelector(`.messageRow[data-id="${id}"] .reactions`);if(!bar)return;bar.innerHTML='';const groups=new Map();reactions.forEach(r=>groups.set(r.emoji,(groups.get(r.emoji)||0)+1));groups.forEach((count,emoji)=>{const b=document.createElement('button');b.type='button';b.textContent=`${emoji}${count>1?' '+count:''}`;b.onclick=()=>socket?.emit('react',{messageId:id,emoji});bar.append(b);});}
 function openReactionMenu(target,messageId,longPress=false){
   document.querySelector('.reactionMenu')?.remove();const menu=document.createElement('div');menu.className=`reactionMenu${longPress?' reactionMenuLong':''}`;
@@ -530,23 +524,6 @@ function openReactionMenu(target,messageId,longPress=false){
   setTimeout(()=>document.addEventListener('pointerdown',e=>{if(!menu.contains(e.target))menu.remove();},{once:true}),0);
 }
 function reactionBurst(emoji){const layer=document.createElement('div');layer.className='reactionBurst';for(let i=0;i<18;i++){const s=document.createElement('span');s.textContent=emoji;s.style.setProperty('--x',`${(Math.random()*120-60).toFixed(1)}vw`);s.style.setProperty('--r',`${Math.random()*360-180}deg`);s.style.setProperty('--d',`${Math.random()*.35}s`);s.style.left=`${30+Math.random()*40}%`;layer.append(s);}document.body.append(layer);setTimeout(()=>layer.remove(),1500);}
-
-let deletedTorchActive=false;
-function setDeletedTorch(active){
-  deletedTorchActive=Boolean(active);
-  $('chat')?.classList.toggle('torchReveal',deletedTorchActive);
-  const t=$('deletedTorch');if(t)t.setAttribute('aria-pressed',String(deletedTorchActive));
-}
-(function setupDeletedTorch(){
-  const torch=$('deletedTorch');if(!torch)return;
-  let dragging=false,offsetY=0;
-  torch.addEventListener('pointerdown',e=>{dragging=true;torch.setPointerCapture?.(e.pointerId);offsetY=e.clientY-torch.getBoundingClientRect().top;setDeletedTorch(true);e.preventDefault();});
-  torch.addEventListener('pointermove',e=>{if(!dragging)return;const chat=$('chat').getBoundingClientRect();const h=torch.offsetHeight||46;const y=Math.max(8,Math.min(chat.height-h-8,e.clientY-chat.top-offsetY));torch.style.top=`${y}px`;torch.style.bottom='auto';});
-  const stop=e=>{if(!dragging)return;dragging=false;try{torch.releasePointerCapture?.(e.pointerId);}catch{}setDeletedTorch(false);};
-  torch.addEventListener('pointerup',stop);torch.addEventListener('pointercancel',stop);
-  torch.addEventListener('keydown',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();setDeletedTorch(true);}});
-  torch.addEventListener('keyup',()=>setDeletedTorch(false));torch.addEventListener('blur',()=>setDeletedTorch(false));
-})();
 
 function appendLinkPreview(bubble,body=''){
   const match=body.match(/https?:\/\/[^\s]+/i); if(!match)return;
@@ -611,11 +588,28 @@ $('saveIdentity').onclick=async()=>{
 function showEmergencyLock(){socket?.disconnect();setTyping(false);$('lockScreen').classList.remove('hidden');$('unlockPassword').value='';$('unlockError').textContent='';setTimeout(()=>$('unlockPassword').focus(),50);}
 function hideEmergencyLock(){$('lockScreen').classList.add('hidden');}
 $('unlockForm').addEventListener('submit',async e=>{e.preventDefault();const password=$('unlockPassword').value;const r=await fetch('/api/emergency/unlock',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password})});const data=await r.json().catch(()=>({}));if(!r.ok){$('unlockError').textContent=data.error||'Could not unlock.';$('unlockPassword').select();return;}hideEmergencyLock();location.reload();});
+async function bookmarkBloop(){
+  const target=currentRoom&&authToken?`${location.origin}/chat/${encodeURIComponent(currentRoom)}`:`${location.origin}/`;
+  const hint=$('bookmarkHint');
+  try{
+    if(navigator.share){
+      await navigator.share({title:'Bloop',text:'Bloop',url:target});
+      if(hint)hint.textContent='Use your browser share menu to Add to Home Screen or save the page.';
+      return;
+    }
+  }catch(err){if(err?.name==='AbortError')return;}
+  try{await navigator.clipboard.writeText(target);}catch{}
+  const isMac=/Mac|iPhone|iPad|iPod/.test(navigator.platform)||/Mac OS|iPhone|iPad/.test(navigator.userAgent);
+  const msg=isMac?'Link copied. In Safari press ⌘D, or Share → Add to Home Screen.':'Link copied. Use your browser bookmark button to save Bloop.';
+  if(hint)hint.textContent=msg;else alert(msg);
+}
+['bookmarkBtn','dialogBookmarkBtn','setupBookmarkBtn'].forEach(id=>$(id)?.addEventListener('click',bookmarkBloop));
+
 const emergencySearches=['cats','dogs','cute capybaras','space facts','easy pasta recipes','funny animals','sunsets','house plants','cloud pictures','football scores','ocean waves','pandas','weather today','best pancakes'];
 async function emergencyExit(){
   const q=emergencySearches[Math.floor(Math.random()*emergencySearches.length)];
   try{await Promise.race([broadcastActivityStatus('emergency'),new Promise(r=>setTimeout(r,220))]);}catch{}
-  location.replace(`https://www.google.com/search?q=${encodeURIComponent(q)}`);
+  location.assign(`https://www.google.com/search?q=${encodeURIComponent(q)}`);
 }
 $('emergencyBtn').onclick=emergencyExit;$('globalEmergencyBtn').onclick=emergencyExit;
 
