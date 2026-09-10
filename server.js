@@ -155,6 +155,10 @@ function authenticate(roomId, authToken) {
   const h = sha256(authToken);
   if (h === room.creator_token_hash) return { room, role: 'creator' };
   if (room.guest_token_hash && h === room.guest_token_hash) return { room, role: 'guest' };
+  // After an invite has been accepted, the original invite link also acts as
+  // the guest's cross-device access credential. This lets the same person
+  // open that invite on an iPad/laptop without kicking their phone out.
+  if (room.invite_status === 'accepted' && h === room.share_token_hash) return { room, role: 'guest' };
   return null;
 }
 
@@ -337,6 +341,12 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
     if (auth) return res.json({ role: auth.role, authToken: existingToken });
   }
   if (room.invite_status === 'declined') return res.status(410).json({ error: 'This invite was declined.' });
+  // The accepted guest may reopen the original invite on another device.
+  // Return the invite token itself; authenticate() accepts it only for the guest
+  // after this room has already been accepted. The phone remains signed in too.
+  if (room.guest_token_hash && room.invite_status === 'accepted') {
+    return res.json({ role: 'guest', authToken: shareToken, resumed: true });
+  }
   if (room.guest_token_hash) return res.status(403).json({ error: 'This chat already has its two people.' });
   const guestToken = token(32);
   const result = db.prepare(`UPDATE rooms SET guest_token_hash = ?, invite_status = 'accepted', invite_status_at = ? WHERE id = ? AND guest_token_hash IS NULL AND invite_status != 'declined'`).run(sha256(guestToken), Date.now(), roomId);

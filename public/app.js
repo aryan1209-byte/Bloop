@@ -934,4 +934,3 @@ function installSwipeToReply(){
 installSwipeToReply();
 
 
-function updateBloopMenuClock(){const el=$('bloopMenuClock');if(!el)return;el.textContent=new Intl.DateTimeFormat(undefined,{weekday:'short',hour:'2-digit',minute:'2-digit'}).format(new Date());}updateBloopMenuClock();setInterval(updateBloopMenuClock,30000);

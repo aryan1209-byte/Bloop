@@ -712,3 +712,9 @@ body{position:relative!important;isolation:isolate!important;background:none!imp
 .bloopAppMenuBar{position:fixed;z-index:10000;left:0;right:0;top:0;height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:rgba(6,11,19,.76);border-bottom:1px solid rgba(255,255,255,.10);-webkit-backdrop-filter:blur(20px) saturate(150%);backdrop-filter:blur(20px) saturate(150%);color:#f4f7ff;font-size:12px;box-shadow:0 5px 18px rgba(0,0,0,.12)}
 .bloopMenuLeft,.bloopMenuRight{display:flex;align-items:center;gap:15px;min-width:0}.bloopMenuIcon{width:20px;height:20px;border-radius:6px;object-fit:cover}.bloopMenuLeft strong{font-size:13px}.bloopMenuItem{color:rgba(244,247,255,.78);user-select:none}.bloopMenuClock{color:rgba(244,247,255,.72);font-variant-numeric:tabular-nums}.bloopVersion{position:fixed;z-index:9999;left:10px;bottom:8px;padding:4px 7px;border-radius:8px;background:rgba(6,11,19,.48);border:1px solid rgba(255,255,255,.08);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);color:rgba(238,244,255,.62);font-size:9px;font-weight:700;letter-spacing:.04em;pointer-events:none}body{padding-top:34px!important}.pageWaterBg{top:34px!important}
 @media(max-width:650px){.bloopAppMenuBar{height:30px;padding:0 9px;font-size:10px}.bloopMenuLeft,.bloopMenuRight{gap:9px}.bloopMenuIcon{width:18px;height:18px;border-radius:5px}.bloopMenuItem{display:none}body{padding-top:30px!important}.pageWaterBg{top:30px!important}.chat{height:calc(100dvh - 30px)!important;min-height:calc(100dvh - 30px)!important}.bloopVersion{left:6px;bottom:5px;font-size:8px;padding:3px 5px}}
+
+/* v30: remove the v29 app menu bar and restore original page geometry */
+.bloopAppMenuBar{display:none!important}
+body{padding-top:0!important}
+.pageWaterBg{top:-2px!important}
+@media(max-width:650px){body{padding-top:0!important}.pageWaterBg{top:-2px!important}.chat{height:100dvh!important;min-height:100dvh!important}}

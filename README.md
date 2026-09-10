@@ -18,3 +18,9 @@ Removing a contact now changes the chat state for both people instead of only de
 - Reply preview appears above the composer and can be cancelled.
 - Sent replies show the referenced message and can be tapped to jump back to it.
 - Reply relationships are stored in SQLite using `reply_to_id`.
+
+## v30 cross-device invite handoff
+- Removed the v29 top app/menu bar.
+- Kept the small version badge and updated it to Bloop v30.
+- Once the invited person accepts a chat, the original invite link can be opened on their iPad/laptop to resume the same guest chat.
+- The original phone session stays valid; handoff does not replace its guest token.
