@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS rooms (
   share_token_hash TEXT NOT NULL UNIQUE,
   creator_token_hash TEXT NOT NULL,
   guest_token_hash TEXT,
+  invite_status TEXT NOT NULL DEFAULT 'pending',
+  invite_status_at INTEGER,
   created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS messages (
@@ -84,6 +86,10 @@ for (const [name, sql] of [
   ['seen_at', `ALTER TABLE messages ADD COLUMN seen_at INTEGER`]
 ]) if (!messageColumns.includes(name)) db.exec(sql);
 
+
+const roomColumns = db.prepare('PRAGMA table_info(rooms)').all().map(c => c.name);
+if (!roomColumns.includes('invite_status')) db.exec(`ALTER TABLE rooms ADD COLUMN invite_status TEXT NOT NULL DEFAULT 'pending'`);
+if (!roomColumns.includes('invite_status_at')) db.exec(`ALTER TABLE rooms ADD COLUMN invite_status_at INTEGER`);
 
 const profileColumns = db.prepare('PRAGMA table_info(profiles)').all().map(c => c.name);
 if (!profileColumns.includes('last_seen')) db.exec(`ALTER TABLE profiles ADD COLUMN last_seen INTEGER`);
@@ -250,19 +256,31 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
     const auth = authenticate(roomId, existingToken);
     if (auth) return res.json({ role: auth.role, authToken: existingToken });
   }
+  if (room.invite_status === 'declined') return res.status(410).json({ error: 'This invite was declined.' });
   if (room.guest_token_hash) return res.status(403).json({ error: 'This chat already has its two people.' });
   const guestToken = token(32);
-  const result = db.prepare('UPDATE rooms SET guest_token_hash = ? WHERE id = ? AND guest_token_hash IS NULL').run(sha256(guestToken), roomId);
+  const result = db.prepare(`UPDATE rooms SET guest_token_hash = ?, invite_status = 'accepted', invite_status_at = ? WHERE id = ? AND guest_token_hash IS NULL AND invite_status != 'declined'`).run(sha256(guestToken), Date.now(), roomId);
   if (!result.changes) return res.status(403).json({ error: 'This chat already has its two people.' });
   db.prepare(`INSERT OR IGNORE INTO profiles (room_id, role, display_name) VALUES (?, 'guest', 'Friend')`).run(roomId);
   res.json({ role: 'guest', authToken: guestToken });
+});
+
+app.post('/api/rooms/:roomId/decline', (req, res) => {
+  const { roomId } = req.params;
+  const { shareToken } = req.body || {};
+  const room = db.prepare('SELECT * FROM rooms WHERE id = ?').get(roomId);
+  if (!room || !shareToken || sha256(shareToken) !== room.share_token_hash) return res.status(404).json({ error: 'Invalid room link.' });
+  if (room.guest_token_hash || room.invite_status === 'accepted') return res.status(409).json({ error: 'This invite was already accepted.' });
+  db.prepare(`UPDATE rooms SET invite_status = 'declined', invite_status_at = ? WHERE id = ?`).run(Date.now(), roomId);
+  io.to(roomId).emit('invite-declined', { roomId });
+  res.json({ ok: true });
 });
 
 app.get('/api/rooms/:roomId/messages', (req, res) => {
   const auth = authRequest(req);
   if (!auth) return res.status(401).json({ error: 'Not authorized.' });
   const unreadCount = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE room_id = ? AND sender != ? AND seen_at IS NULL AND deleted_at IS NULL').get(req.params.roomId, auth.role).n;
-  res.json({ role: auth.role, messages: serializeMessages(req.params.roomId), profiles: getProfiles(req.params.roomId), presence: presencePayload(req.params.roomId), unreadCount });
+  res.json({ role: auth.role, messages: serializeMessages(req.params.roomId), profiles: getProfiles(req.params.roomId), presence: presencePayload(req.params.roomId), unreadCount, inviteStatus: auth.room.invite_status || 'pending', inviteStatusAt: auth.room.invite_status_at || null });
 });
 
 app.patch('/api/rooms/:roomId/profile', (req, res) => {
@@ -298,7 +316,7 @@ app.post('/api/rooms/:roomId/activity-status', (req, res) => {
   const auth = authRequest(req);
   if (!auth) return res.status(401).json({ error: 'Not authorized.' });
   const raw = String(req.body?.status || 'active');
-  if (!['active','blurred','emergency'].includes(raw)) return res.status(400).json({ error: 'Invalid status.' });
+  if (!['active','blurred','emergency','recording-audio','taking-photo'].includes(raw)) return res.status(400).json({ error: 'Invalid status.' });
   const stored = raw === 'active' ? null : raw;
   const now = Date.now();
   db.prepare('UPDATE profiles SET activity_status = ?, status_at = ? WHERE room_id = ? AND role = ?').run(stored, now, req.params.roomId, auth.role);
@@ -363,7 +381,7 @@ io.on('connection', socket => {
 
   socket.on('activity-status', (value, ack) => {
     const raw = String(value || 'active');
-    if (!['active','blurred','emergency'].includes(raw)) { if (typeof ack === 'function') ack({ ok: false }); return; }
+    if (!['active','blurred','emergency','recording-audio','taking-photo'].includes(raw)) { if (typeof ack === 'function') ack({ ok: false }); return; }
     const stored = raw === 'active' ? null : raw;
     const now = Date.now();
     db.prepare('UPDATE profiles SET activity_status = ?, status_at = ? WHERE room_id = ? AND role = ?').run(stored, now, roomId, role);

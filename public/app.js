@@ -142,6 +142,24 @@ const customizationKey='justtwo:appearance:v2';
 let appearance={theme:'midnight',bubble:'red',privacy:false,idleMinutes:5};
 let idleBlurTimer=null;
 try{ appearance={...appearance,...JSON.parse(localStorage.getItem(customizationKey)||'{}')}; }catch{}
+const THEME_STICKERS={
+  midnight:'🌙',
+  cursed:'☁️',
+  wisteria:'🦋',
+  tokyo:'🏎️',
+  sakura:'🌸',
+  cyber:'⚡',
+  aurora:'✨',
+  storm:'⛈️',
+  mono:'◐'
+};
+function updateThemeMascot(){
+  const sticker=$('themeMascot');
+  if(!sticker)return;
+  sticker.textContent=THEME_STICKERS[appearance.theme]||'🌙';
+  sticker.dataset.themeSticker=appearance.theme;
+  sticker.classList.remove('hidden');
+}
 function applyAppearance(){
   document.documentElement.dataset.theme=appearance.theme;
   const found=BUBBLE_COLORS.find(c=>c.id===appearance.bubble)||BUBBLE_COLORS[0];
@@ -152,6 +170,7 @@ function applyAppearance(){
   document.body.classList.remove('privacyEnabled');
   ['privacyToggle','dialogPrivacyToggle','setupPrivacyToggle'].forEach(id=>{if($(id))$(id).checked=Boolean(appearance.privacy);});
   ['idleBlurSelect','dialogIdleBlurSelect','setupIdleBlurSelect'].forEach(id=>{if($(id))$(id).value=String(Number.isFinite(Number(appearance.idleMinutes))?Number(appearance.idleMinutes):5);});
+  updateThemeMascot();
   resetIdleBlurTimer();
 }
 function themeCard(theme){
@@ -173,7 +192,6 @@ $('shuffleVibe').onclick=()=>{appearance.theme=THEMES[Math.floor(Math.random()*T
 ['privacyToggle','dialogPrivacyToggle','setupPrivacyToggle'].forEach(id=>$(id)?.addEventListener('change',e=>{appearance.privacy=e.target.checked;applyAppearance();if(e.target.checked)engagePrivacyShield();}));
 ['idleBlurSelect','dialogIdleBlurSelect','setupIdleBlurSelect'].forEach(id=>$(id)?.addEventListener('change',e=>{appearance.idleMinutes=Math.max(0,Number(e.target.value)||0);applyAppearance();}));
 
-function updateThemeMascot(){}
 function resetIdleBlurTimer(){
   clearTimeout(idleBlurTimer);idleBlurTimer=null;
   const mins=Number(appearance.idleMinutes)||0;
@@ -257,7 +275,17 @@ async function setupContacts({notify=false}={}){
     try{
       appHeartbeat(id,token);
       const r=await fetch(`/api/rooms/${encodeURIComponent(id)}/messages`,{headers:{'x-chat-token':token},cache:'no-store'});if(!r.ok)return null;
-      const data=await r.json();const role=data.role||localStorage.getItem(roleKey(id));const other=role==='creator'?'guest':'creator';const p=(data.profiles||{})[other]||{displayName:'Friend',avatarUrl:null,username:''};
+      const data=await r.json();const role=data.role||localStorage.getItem(roleKey(id));
+      if(role==='creator'&&data.inviteStatus==='declined'){
+        const declinedKey=`justtwo:declinedByInvitee:${id}`;
+        const firstNotice=localStorage.getItem(declinedKey)!=='1';
+        localStorage.setItem(declinedKey,'1');
+        const remaining=getRooms().filter(rid=>rid!==id);localStorage.setItem(roomsKey,JSON.stringify(remaining));
+        localStorage.removeItem(storageKey(id));localStorage.removeItem(roleKey(id));
+        if(firstNotice)setTimeout(()=>showHomeNotice('They didn’t accept your invite, so the chat was removed.'),0);
+        return null;
+      }
+      const other=role==='creator'?'guest':'creator';const p=(data.profiles||{})[other]||{displayName:'Friend',avatarUrl:null,username:''};
       const unread=Number(data.unreadCount||0);const state=contactPresence(data,other);const last=data.messages?.at(-1);const sub=last?(last.type==='text'?(last.body||'Message').slice(0,55):last.type==='image'?'Photo':'Voice note'):'No messages yet';
       return{id,token,p,unread,state,sub};
     }catch{return null;}
@@ -291,15 +319,18 @@ function stopHomeRefresh(){clearInterval(homeRefreshTimer);homeRefreshTimer=null
 
 function showInviteCard(){ $('inviteCard').classList.toggle('hidden',!pendingInvite); }
 async function goHome(replace=true){
+  if($('setupDialog')?.open)$('setupDialog').close();
+  if($('profileDialog')?.open)$('profileDialog').close();
   socket?.disconnect(); setTyping(false); show('landing'); showInviteCard(); await setupContacts({notify:false}); startHomeRefresh();
   if(replace) history.replaceState({view:'home'},'',pendingInvite?`/?room=${encodeURIComponent(inviteRoomId)}&invite=${encodeURIComponent(inviteToken)}`:'/');
 }
 $('shareBackBtn').onclick=()=>{
+  if($('setupDialog')?.open)$('setupDialog').close();
   currentRoom = null;
   authToken = null;
   myRole = null;
   goHome();
-}; $('errorHomeBtn').onclick=()=>goHome(); $('chatBackBtn').onclick=()=>history.back();
+}; $('errorHomeBtn').onclick=()=>goHome(); $('chatBackBtn').onclick=()=>{if($('setupDialog')?.open)$('setupDialog').close();history.back();};
 
 $('createBtn').onclick=async()=>{
   stopHomeRefresh();
@@ -322,7 +353,14 @@ $('acceptInviteBtn').onclick=async()=>{
   localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);rememberRoom(currentRoom);
   history.replaceState({view:'home'},'','/'); await openChat(true);
 };
-$('declineInviteBtn').onclick=()=>{if(declinedInviteKey&&inviteToken)localStorage.setItem(declinedInviteKey,inviteToken);pendingInvite=false;history.replaceState({view:'home'},'','/');showInviteCard();showHomeNotice('Invite disabled on this device.');};
+$('declineInviteBtn').onclick=async()=>{
+  if(!pendingInvite)return;
+  try{
+    await fetch(`/api/rooms/${encodeURIComponent(inviteRoomId)}/decline`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({shareToken:inviteToken})});
+  }catch{}
+  if(declinedInviteKey&&inviteToken)localStorage.setItem(declinedInviteKey,inviteToken);
+  pendingInvite=false;history.replaceState({view:'home'},'','/');showInviteCard();showHomeNotice('Invite declined.');
+};
 function fail(message){$('errorText').textContent=message;show('error');}
 async function resumeRoom(id,pushHistory=true){currentRoom=id;authToken=localStorage.getItem(storageKey(id));myRole=localStorage.getItem(roleKey(id));if(!authToken)return fail('This browser does not have access to that private chat.');await openChat(pushHistory);}
 async function openChat(pushHistory=true){
@@ -350,11 +388,12 @@ function connectSocket(){
   socket.on('connect',()=>{socket.emit('seen');});
   socket.on('message-deleted',({messageId})=>markDeleted(messageId));
   socket.on('profile',data=>{profiles[data.role]={...(profiles[data.role]||{}),displayName:data.displayName,avatarUrl:data.avatarUrl,username:data.username||''};refreshHeader();document.querySelectorAll(`[data-sender="${data.role}"] .messageAvatar`).forEach(img=>setAvatar(img,data.role));});
+  socket.on('invite-declined',()=>{if(myRole==='creator'&&currentRoom){const id=currentRoom;socket?.disconnect();forgetRoom(id);currentRoom=null;authToken=null;myRole=null;goHome(false).then(()=>showHomeNotice('They didn’t accept your invite, so the chat was removed.'));}});
   socket.on('emergency-lock',()=>showEmergencyLock());
   socket.on('connect_error',err=>{if(err?.message==='app_locked')showEmergencyLock();else $('presence').textContent='connection lost';});
 }
 function formatLastSeen(ts){if(!ts)return'offline';const d=new Date(ts),now=new Date(),same=d.toDateString()===now.toDateString(),y=new Date(now);y.setDate(now.getDate()-1);const time=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});if(same)return`last seen today at ${time}`;if(d.toDateString()===y.toDateString())return`last seen yesterday at ${time}`;return`last seen ${d.toLocaleDateString([],{month:'short',day:'numeric'})} at ${time}`;}
-function updatePresence(data={}){const other=myRole==='creator'?'guest':'creator';const online=new Set(data.online||[]);const p=$('presence'),dot=$('presenceDot');const activity=data.activity?.[other]||profiles[other]?.activityStatus;let next,cls;if(activity==='emergency'){next='emergency button pressed';cls='emergency';}else if(activity==='blurred'){next='screen blurred';cls='blurred';}else if(otherTyping&&online.has(other)){next='typing…';cls='online';}else if(online.has(other)){next='online';cls='online';}else if(data.lastSeen?.[other]||profiles[other]?.lastSeen){next=formatLastSeen(data.lastSeen?.[other]||profiles[other]?.lastSeen);cls='lastseen';}else{next='offline';cls='offline';}dot.className=`presenceDot ${cls}`;if(p.textContent!==next){p.textContent=next;p.classList.remove('statusPulse');void p.offsetWidth;p.classList.add('statusPulse');}}
+function updatePresence(data={}){const other=myRole==='creator'?'guest':'creator';const online=new Set(data.online||[]);const p=$('presence'),dot=$('presenceDot');const activity=data.activity?.[other]||profiles[other]?.activityStatus;let next,cls;if(activity==='emergency'){next='emergency button pressed';cls='emergency';}else if(activity==='blurred'){next='screen blurred';cls='blurred';}else if(activity==='recording-audio'){next='recording audio…';cls='busy';}else if(activity==='taking-photo'){next='taking a photo…';cls='busy';}else if(otherTyping&&online.has(other)){next='typing…';cls='online';}else if(online.has(other)){next='online';cls='online';}else if(data.lastSeen?.[other]||profiles[other]?.lastSeen){next=formatLastSeen(data.lastSeen?.[other]||profiles[other]?.lastSeen);cls='lastseen';}else{next='offline';cls='offline';}dot.className=`presenceDot ${cls}`;if(p.textContent!==next){p.textContent=next;p.classList.remove('statusPulse');void p.offsetWidth;p.classList.add('statusPulse');}}
 function updateTypingBubble(){$('typingBubble').classList.toggle('hidden',!otherTyping);if(otherTyping)setTimeout(scrollBottom,20);}
 function setTyping(value){if(!socket?.connected)return;if(sentTyping!==value){sentTyping=value;socket.emit('typing',value);}clearTimeout(typingTimer);if(value)typingTimer=setTimeout(()=>setTyping(false),1400);}
 function clearEmpty(){if($('messages').querySelector('.empty'))$('messages').innerHTML='';}
@@ -364,6 +403,11 @@ async function broadcastActivityStatus(status){
   if(socket?.connected)socket.emit('activity-status',status);
   const jobs=getRooms().map(id=>{const token=localStorage.getItem(storageKey(id));if(!token)return null;return fetch(`/api/rooms/${encodeURIComponent(id)}/activity-status`,{method:'POST',headers:{'content-type':'application/json','x-chat-token':token},body:JSON.stringify({status}),keepalive:true}).catch(()=>null);}).filter(Boolean);
   if(jobs.length)await Promise.allSettled(jobs);
+}
+async function setCurrentChatActivity(status){
+  if(!currentRoom||!authToken)return;
+  if(socket?.connected){socket.emit('activity-status',status);return;}
+  try{await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/activity-status`,{method:'POST',headers:{'content-type':'application/json','x-chat-token':authToken},body:JSON.stringify({status}),keepalive:true});}catch{}
 }
 function engagePrivacyShield(reason='manual'){
   clearTimeout(idleBlurTimer);idleBlurTimer=null;
@@ -447,10 +491,13 @@ $('form').addEventListener('submit',e=>{e.preventDefault();const value=$('input'
 $('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('form').requestSubmit();}});
 $('input').addEventListener('input',e=>{e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,130)+'px';setTyping(Boolean(e.target.value.trim()));});$('input').addEventListener('blur',()=>setTyping(false));
 $('imageBtn').onclick=()=>$('imageInput').click();$('imageInput').onchange=async()=>{const file=$('imageInput').files[0];if(file)await uploadMedia('image',file);$('imageInput').value='';};
-$('cameraBtn').onclick=()=>$('cameraInput').click();$('cameraInput').onchange=async()=>{const file=$('cameraInput').files[0];if(file)await uploadMedia('image',file);$('cameraInput').value='';};
+let cameraActivityOpen=false;
+$('cameraBtn').onclick=async()=>{cameraActivityOpen=true;await setCurrentChatActivity('taking-photo');$('cameraInput').click();};
+$('cameraInput').onchange=async()=>{try{const file=$('cameraInput').files[0];if(file)await uploadMedia('image',file);}finally{$('cameraInput').value='';cameraActivityOpen=false;await setCurrentChatActivity('active');}};
+window.addEventListener('focus',()=>{if(!cameraActivityOpen)return;setTimeout(()=>{if(cameraActivityOpen){cameraActivityOpen=false;setCurrentChatActivity('active');}},600);});
 async function uploadMedia(kind,blob){const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/upload/${kind}`,{method:'POST',headers:{'x-chat-token':authToken,'content-type':blob.type||'application/octet-stream'},body:blob});const data=await r.json().catch(()=>({}));if(!r.ok)alert(data.error||'Upload failed.');return data;}
-$('voiceBtn').onclick=async()=>{if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)return alert('Voice recording is not supported in this browser.');try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});recordedChunks=[];const preferred=['audio/webm;codecs=opus','audio/mp4'].find(t=>MediaRecorder.isTypeSupported(t));recorder=new MediaRecorder(stream,preferred?{mimeType:preferred}:undefined);recorder.ondataavailable=e=>{if(e.data.size)recordedChunks.push(e.data);};recorder.onstop=()=>stream.getTracks().forEach(t=>t.stop());recorder.start();recordStarted=Date.now();$('recordingBar').classList.remove('hidden');$('form').classList.add('recording');recordTimer=setInterval(()=>{const s=Math.floor((Date.now()-recordStarted)/1000);$('recordTime').textContent=`Recording ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;},250);}catch{alert('Microphone permission is needed for voice notes.');}};
-function stopRecording(){if(recorder&&recorder.state!=='inactive')recorder.stop();clearInterval(recordTimer);$('recordingBar').classList.add('hidden');$('form').classList.remove('recording');}
+$('voiceBtn').onclick=async()=>{if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)return alert('Voice recording is not supported in this browser.');try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});recordedChunks=[];const preferred=['audio/webm;codecs=opus','audio/mp4'].find(t=>MediaRecorder.isTypeSupported(t));recorder=new MediaRecorder(stream,preferred?{mimeType:preferred}:undefined);recorder.ondataavailable=e=>{if(e.data.size)recordedChunks.push(e.data);};recorder.onstop=()=>stream.getTracks().forEach(t=>t.stop());recorder.start();await setCurrentChatActivity('recording-audio');recordStarted=Date.now();$('recordTime').textContent='Recording 0:00';$('recordingBar').classList.remove('hidden');$('form').classList.add('recording');recordTimer=setInterval(()=>{const s=Math.floor((Date.now()-recordStarted)/1000);$('recordTime').textContent=`Recording ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;},250);}catch{setCurrentChatActivity('active');alert('Microphone permission is needed for voice notes.');}};
+function stopRecording(){if(recorder&&recorder.state!=='inactive')recorder.stop();clearInterval(recordTimer);$('recordingBar').classList.add('hidden');$('form').classList.remove('recording');setCurrentChatActivity('active');}
 $('cancelRecord').onclick=()=>{stopRecording();recordedChunks=[];};$('sendRecord').onclick=async()=>{if(!recorder)return;const type=recorder.mimeType||'audio/webm';stopRecording();await new Promise(r=>setTimeout(r,80));const blob=new Blob(recordedChunks,{type});recordedChunks=[];if(blob.size)await uploadMedia('audio',blob);};
 
 async function uploadAvatarFrom(inputId){const file=$(inputId).files[0];if(!file)return null;const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/upload/avatar`,{method:'POST',headers:{'x-chat-token':authToken,'content-type':file.type},body:file});const data=await r.json();if(!r.ok){alert(data.error||'Could not upload photo.');return null;}profiles[myRole]=data;refreshHeader();$(inputId).value='';return data;}
@@ -483,6 +530,8 @@ async function emergencyExit(){
 $('emergencyBtn').onclick=emergencyExit;$('globalEmergencyBtn').onclick=emergencyExit;
 
 window.addEventListener('popstate',async()=>{
+  if($('setupDialog')?.open)$('setupDialog').close();
+  if($('profileDialog')?.open)$('profileDialog').close();
   if(location.pathname==='/'||!location.pathname.startsWith('/chat/')){await goHome(false);return;}
   const m=location.pathname.match(/^\/chat\/([^/]+)$/);if(m)await resumeRoom(decodeURIComponent(m[1]),false);
 });
