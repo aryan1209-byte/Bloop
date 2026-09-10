@@ -44,8 +44,8 @@ html[data-theme="aurora"]{--bg:#06100f;--panel:#0b1917;--ink:#ecf8f4;--muted:#86
 html[data-theme="storm"]{--bg:#090c10;--panel:#141920;--ink:#f0f3f6;--muted:#8f99a5;--line:#2d3540;--soft:#1c232c;--their-bubble:#232b35;--wallpaper:#0d1117;--accent:#65758b}
 html[data-theme="mono"]{--bg:#060606;--panel:#111214;--ink:#f2f2f2;--muted:#8c8e93;--line:#292b30;--soft:#1c1e22;--their-bubble:#222429;--wallpaper:#090a0b;--accent:#70747c}
 .messages{position:relative;isolation:isolate}.messages:before{position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:.085;font-weight:950;letter-spacing:.18em;font-size:19px;line-height:5.2;transform:rotate(-8deg) scale(1.1);white-space:pre-wrap;text-align:center}
-html[data-theme="cursed"] .messages:before{content:"GOJO   ∞   GOJO   ◉\A ∞   CURSED   GOJO   ∞\A GOJO   ◉   INFINITY   GOJO\A ∞   GOJO   ∞   GOJO";color:#bca8ff}
-html[data-theme="wisteria"] .messages:before{content:"GIYU   水   GIYU   〰\A 水   WATER   GIYU   水\A GIYU   〰   WATER   GIYU\A 水   GIYU   水   GIYU";color:#77c6d1}
+html[data-theme="cursed"] .messages:before{content:"";background:none!important}
+html[data-theme="wisteria"] .messages:before{content:"";background:none!important}
 html[data-theme="tokyo"] .messages:before{content:"TOKYO   夜   24:00   NEON\A 雨   TOKYO   NEON   雨\A NIGHT   東京   NIGHT   東京";color:#c05bb4}
 html[data-theme="redmoon"] .messages:before{content:"RED MOON   ◐   NIGHT\A ◐   CRIMSON   ◐   SHADOW\A NIGHT   ◐   RED MOON";color:#c94a5f}
 html[data-theme="sakura"] .messages:before{content:"SAKURA   桜   NIGHT\A 桜   AFTER DARK   桜\A NIGHT   桜   SAKURA";color:#bd719d}
@@ -69,8 +69,6 @@ html{scrollbar-color:#3a4250 #0d1015}*::-webkit-scrollbar{width:10px;height:10px
 .privacyWidget p{max-width:520px}.privacyWidget h2{font-size:18px}.privacyWidget .muted:after{content:" One tap of the eye button hides the whole screen; double-tap the blur to come back."}
 /* no dot wallpaper */
 .messages{background:var(--wallpaper)!important;background-image:none!important;overflow-x:hidden}.messages:before{content:""!important;opacity:.24!important;transform:none!important;inset:0!important;background-repeat:no-repeat!important;background-position:right bottom!important;background-size:min(68%,520px) auto!important}
-html[data-theme="cursed"] .messages:before{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 520 620'%3E%3Cg opacity='.9'%3E%3Ccircle cx='330' cy='180' r='126' fill='none' stroke='%23896bff' stroke-width='4' opacity='.25'/%3E%3Ccircle cx='330' cy='180' r='88' fill='none' stroke='%23896bff' stroke-width='2' opacity='.16'/%3E%3Cpath d='M285 154c15-55 76-72 111-26 23 31 16 84-14 111-29 27-84 19-103-18-10-20-8-44 6-67Z' fill='%23e9e8ef'/%3E%3Cpath d='M275 143c11-58 90-85 128-29l-11 13-22-20-13 20-22-25-15 28-21-12-24 25Z' fill='%23f4f4f7'/%3E%3Crect x='275' y='159' width='126' height='31' rx='13' fill='%2307080c'/%3E%3Cpath d='M235 602c2-171 43-292 100-306 56 11 106 131 109 306Z' fill='%23121724'/%3E%3Cpath d='M272 306c28 31 98 31 126 0l25 296H247Z' fill='%23101520'/%3E%3Cpath d='M316 223c8 13 29 13 38 0' fill='none' stroke='%23938da3' stroke-width='4' stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E");}
-html[data-theme="wisteria"] .messages:before{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 520 620'%3E%3Cg opacity='.92'%3E%3Cpath d='M70 390c72-104 149-123 224-58 59 51 112 31 162-34-35 104-92 146-166 111-84-40-144-21-220 51Z' fill='none' stroke='%234b9da8' stroke-width='14' opacity='.18'/%3E%3Cpath d='M278 140c16-48 75-62 112-29 36 32 36 91 2 124-33 32-91 28-116-10-16-25-15-57 2-85Z' fill='%23d9d8d6'/%3E%3Cpath d='M265 153c7-55 48-92 101-83 31 5 56 24 67 52l-30-7-17 19-17-23-19 23-25-20-17 25-43 14Z' fill='%23101418'/%3E%3Cpath d='M225 605c0-168 48-286 108-304 61 18 112 140 112 304Z' fill='%23101d23'/%3E%3Cpath d='M225 605c0-155 25-249 108-304v304Z' fill='%23212c30'/%3E%3Cpath d='M333 301c70 44 99 133 112 304H333Z' fill='%2316272e'/%3E%3Cpath d='M333 301l112 304' stroke='%234b9da8' stroke-width='5' opacity='.5'/%3E%3Cpath d='M296 222c14 11 42 11 56 0' fill='none' stroke='%238c8782' stroke-width='4' stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E");}
 html[data-theme="tokyo"] .messages:before{background-image:linear-gradient(90deg,transparent 58%,rgba(176,73,164,.06)),repeating-linear-gradient(90deg,transparent 0 61px,rgba(176,73,164,.05) 62px 63px),repeating-linear-gradient(0deg,transparent 0 78px,rgba(53,124,184,.05) 79px 80px)!important;background-size:auto!important}
 html[data-theme="sakura"] .messages:before{background-image:radial-gradient(ellipse at 76% 25%,rgba(155,83,127,.15) 0 3%,transparent 3.4%),radial-gradient(ellipse at 84% 36%,rgba(155,83,127,.1) 0 2%,transparent 2.4%),radial-gradient(ellipse at 68% 52%,rgba(155,83,127,.09) 0 2.5%,transparent 3%)!important;background-size:auto!important}
 html[data-theme="cyber"] .messages:before{background-image:linear-gradient(115deg,transparent 0 55%,rgba(36,120,170,.06) 55% 56%,transparent 56% 64%,rgba(36,120,170,.05) 64% 65%,transparent 65%)!important;background-size:auto!important}
@@ -102,7 +100,7 @@ button,.secondary,.shareRow button,.tinyBtn,.textBtn,.toolBtn,.iconBtn,.backBtn,
 /* KNY water: moving dark waves instead of dots */
 html[data-theme="wisteria"] .messages{position:relative;overflow:hidden;background:linear-gradient(180deg,#0b151a,#081116 70%,#071015)!important}
 html[data-theme="wisteria"] .messages:after{content:"";position:absolute;z-index:0;left:-25%;right:-25%;bottom:-42px;height:155px;pointer-events:none;opacity:.55;background:radial-gradient(ellipse at 50% 100%,transparent 47%,rgba(69,153,171,.27) 48% 52%,transparent 53%) 0 0/180px 70px,radial-gradient(ellipse at 50% 100%,transparent 44%,rgba(38,104,125,.25) 45% 49%,transparent 50%) 90px 18px/210px 78px;animation:waterDrift 7s linear infinite}.messages>*{position:relative;z-index:2}@keyframes waterDrift{to{transform:translateX(180px)}}
-html[data-theme="wisteria"] .messageRow.mine .msg{box-shadow:0 8px 25px #0004}html[data-theme="wisteria"] .messages:before{z-index:1!important;opacity:.34!important}
+html[data-theme="wisteria"] .messageRow.mine .msg{box-shadow:0 8px 25px #0004}html[data-theme="wisteria"] .messages:before{content:"";background:none!important}
 @media(max-width:650px){.reactionGrid{grid-template-columns:repeat(7,1fr)}.simpleFun{align-items:flex-start;gap:10px}.typingBubble{left:50px;bottom:66px}.linkTray{grid-template-columns:1fr auto}.linkTray #closeLinkTray{grid-column:2}.linkTray #sendLinkBtn{grid-row:2;grid-column:1/-1;padding:9px}.compactManual{padding:18px}}
 
 /* v7: richer contact presence, unread badges, camera, and moved typing bubble */
@@ -112,7 +110,33 @@ html[data-theme="wisteria"] .messageRow.mine .msg{box-shadow:0 8px 25px #0004}ht
 
 /* v8: inactivity auto-blur + small theme character art */
 .idlePrivacyWidget{display:block}.idleSetting{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;font-size:12px;font-weight:850;color:var(--ink)}.idleSetting select{min-width:150px;border:1px solid var(--line);border-radius:10px;background:var(--soft);color:var(--ink);padding:9px 10px;font:inherit;font-weight:800}.dialogSection .idleSetting{margin-top:0}
-.themeSwatch{position:relative;overflow:hidden}.themeCharacterThumb{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;background:#0a0d12;filter:saturate(.9) brightness(.82);transform:scale(1.12)}.theme-cursed .themeCharacterThumb{object-position:50% 42%;transform:scale(1.08)}.theme-wisteria .themeCharacterThumb{object-position:50% 18%;transform:scale(1.22)}
-.chat{position:relative}.themeMascot{position:absolute;right:20px;bottom:96px;z-index:4;width:82px;height:112px;object-fit:cover;object-position:center;border-radius:18px;border:1px solid #ffffff18;box-shadow:0 14px 34px #0008;opacity:.42;pointer-events:none;mix-blend-mode:screen;filter:saturate(.85) brightness(.72)}.themeMascot.mascot-cursed{width:86px;height:86px;object-position:center;opacity:.48}.themeMascot.mascot-wisteria{width:80px;height:122px;object-position:50% 16%;opacity:.38}
-html[data-theme="cursed"] .themeMascot{box-shadow:0 0 28px rgba(128,86,255,.18),0 14px 34px #0008}html[data-theme="wisteria"] .themeMascot{box-shadow:0 0 28px rgba(48,148,165,.15),0 14px 34px #0008}
-@media(max-width:650px){.idleSetting{align-items:flex-start;flex-direction:column}.idleSetting select{width:100%}.themeMascot{right:12px;bottom:92px;width:68px;height:96px}.themeMascot.mascot-cursed{width:72px;height:72px}.themeMascot.mascot-wisteria{width:66px;height:102px}}
+.themeSwatch{position:relative;overflow:hidden}.theme-cursed .theme-wisteria 
+.chat{position:relative}
+
+html[data-theme="cursed"] html[data-theme="wisteria"] 
+@media(max-width:650px){.idleSetting{align-items:flex-start;flex-direction:column}.idleSetting select{width:100%}}
+
+
+/* v9: stable contacts, clean theme art, logo polish, first-message spacing */
+.homeHero .logo{width:56px;height:56px;flex:0 0 56px;border-radius:17px;background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 38%,#17191d),#111318);color:#fff;border:1px solid #ffffff16;box-shadow:0 8px 24px #0003;line-height:1;font-size:23px}
+.homeHero{align-items:center}.homeHero>div:last-child{min-width:0}.homeHero h1{margin:2px 0 0;line-height:1;overflow:visible}
+.messages{padding-top:34px!important;scroll-padding-top:34px!important}.messageRow:first-child{margin-top:2px}.messageRow:first-child .msgActions{top:-22px}
+html[data-theme="cursed"] .messages:before,html[data-theme="wisteria"] .messages:before{content:""!important;background:none!important;opacity:0!important}
+.themeCharacterThumb,.themeMascot{display:none!important}
+.contactCard{appearance:none;font:inherit;cursor:pointer}.contactDelete{width:25px;height:25px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--muted);display:grid;place-items:center;font-size:17px;line-height:1;opacity:.6;transition:opacity .15s,background .15s}.contactCard:hover .contactDelete{opacity:1}.contactDelete:hover{background:#ff5d6320;color:#ff777c;border-color:#ff5d6355}.contactSide{flex:0 0 auto}
+@media(max-width:650px){.homeHero .logo{width:50px;height:50px;flex-basis:50px;border-radius:15px}.messages{padding-top:30px!important}.contactDelete{opacity:.8}}
+
+
+/* v10: private shield, dark logos, no character artwork */
+.homeHero .logo,.logo,.logo.small{
+  background:#151922!important;
+  color:var(--accent)!important;
+  border:1px solid rgba(255,255,255,.10)!important;
+  box-shadow:0 10px 28px rgba(0,0,0,.28)!important;
+}
+.homeHero .logo::before,.logo::before{content:"";position:absolute;inset:9px;border-radius:11px;background:radial-gradient(circle at 45% 42%,rgba(255,255,255,.14),transparent 58%);pointer-events:none}
+.homeHero .logo,.logo{position:relative;overflow:hidden}
+.themeCharacterThumb,.themeMascot,[class*="themeCharacter"],[class*="themeMascot"]{display:none!important;background-image:none!important}
+.privacyShield{background:rgba(6,8,12,.64)!important;backdrop-filter:blur(26px) saturate(.42)!important;-webkit-backdrop-filter:blur(26px) saturate(.42)!important}
+.privacyShieldCard{width:1px!important;height:1px!important;min-width:0!important;min-height:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;opacity:0!important;overflow:hidden!important}
+.messages{padding-top:44px!important}

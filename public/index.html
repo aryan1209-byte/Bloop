@@ -18,9 +18,9 @@
     <div class="onboardingPanel compactManual">
       <div class="manualTop"><button id="manualStartOver" class="manualBack hidden" type="button">↶ First step</button><span class="manualEyebrow">JUST TWO</span><span id="manualStepLabel">1 of 3</span></div>
       <div class="onboardingProgress"><span id="onboardingProgress"></span></div>
-      <div class="onboardingStep" data-step="0"><div class="onboardingIcon">✦</div><h2>Welcome to Just Two.</h2><p>Make sure that nobody nearby can read your screen.</p><button class="primary full onboardingNext" type="button">I’m ready</button></div>
-      <div class="onboardingStep hidden" data-step="1"><div class="onboardingIcon">↗</div><h2>Invite one person.</h2><p>Create a chat, send the invite, and they choose whether to accept.</p><div class="manualNav"><button class="secondary onboardingBack" type="button">← Back</button><button class="primary onboardingNext" type="button">Next</button></div></div>
-      <div class="onboardingStep hidden" data-step="2"><div class="onboardingIcon">💬</div><h2>That’s basically it.</h2><p>Messages save, Back returns Home, and the ◉ button instantly blurs the screen.</p><div class="manualNav"><button class="secondary onboardingBack" type="button">← Back</button><button id="finishOnboarding" class="primary" type="button">Open Home</button></div></div>
+      <div class="onboardingStep" data-step="0"><div class="onboardingIcon">✦</div><h2>Welcome.</h2><p>Make sure that nobody nearby can read your screen.</p><button class="primary full onboardingNext" type="button">I’m ready</button></div>
+      <div class="onboardingStep hidden" data-step="1"><div class="onboardingIcon">↗</div><h2>Invite a person.</h2><p>Create a chat, send the invite, and they choose whether to accept.</p><div class="manualNav"><button class="secondary onboardingBack" type="button">← Back</button><button class="primary onboardingNext" type="button">Next</button></div></div>
+      <div class="onboardingStep hidden" data-step="2"><div class="onboardingIcon">💬</div><h2>That’s basically it.</h2><p>Messages save, ! gives you a quick exit, and ◉ instantly blurs the screen.</p><div class="manualNav"><button class="secondary onboardingBack" type="button">← Back</button><button id="finishOnboarding" class="primary" type="button">Open Home</button></div></div>
     </div>
   </section>
 
@@ -45,11 +45,11 @@
           <h1>Just Two</h1>
         </div>
       </div>
-      <p class="homeLead">Your private corner for messages, photos, voice notes and whatever happens next.</p>
+      <p class="homeLead">Your private corner for messages, photos, voice notes.</p>
 
       <div id="inviteCard" class="inviteCard hidden">
         <div class="inviteIcon">↘</div>
-        <div class="inviteCopy"><span>Private invite</span><strong>Someone invited you to Just Two.</strong><small>You only join if you accept.</small></div>
+        <div class="inviteCopy"><span>Private invite</span><strong>Someone invited you to Just Two.</strong><small>You only join if you accept. (But I'd accept that if I were you)</small></div>
         <div class="inviteActions"><button id="declineInviteBtn" class="secondary" type="button">Not now</button><button id="acceptInviteBtn" class="primary" type="button">Accept & join</button></div>
       </div>
 
@@ -68,29 +68,36 @@
 
 
       <section class="homeWidget privacyWidget idlePrivacyWidget">
-        <div>
-          <span class="eyebrow">PRIVACY</span><h2>Need the screen hidden fast?</h2>
-          <p class="muted">Tap ◉ at the top. Everything blurs instantly. Double-tap the blur to come back.</p>
-          <label class="idleSetting">Auto-blur after inactivity
-            <select id="idleBlurSelect" aria-label="Auto blur after inactivity">
-              <option value="0">Off</option>
-              <option value="1">1 minute</option>
-              <option value="2">2 minutes</option>
-              <option value="5">5 minutes</option>
-              <option value="10">10 minutes</option>
-              <option value="15">15 minutes</option>
-              <option value="30">30 minutes</option>
-            </select>
-          </label>
-        </div>
-      </section>
-      <section class="homeWidget privacyWidget">
-        <div><span class="eyebrow">EMERGENCY</span><h2>Stuck in a sticky-situation?</h2><p class="muted">Tap ! at the top. Everything closes instantly, and you will be redirected.</p>
-        <p class="muted">To go back, you will have to enter the link again, so press only in EMERGENCIES.</p>
-        </div>
-      </section>
+  <div>
+    <span class="eyebrow">PRIVACY</span>
+    <h2>Need the screen hidden fast?</h2>
 
-    </section>
+    <p class="muted">
+      Tap ◉ at the top. Everything blurs instantly. Double-tap the blur to come back.
+    </p>
+
+    <label class="idleSetting">
+      Auto-blur after inactivity
+      <select id="idleBlurSelect" aria-label="Auto blur after inactivity">
+        <option value="0">Off</option>
+        <option value="1">1 minute</option>
+        <option value="2">2 minutes</option>
+        <option value="5">5 minutes</option>
+        <option value="10">10 minutes</option>
+        <option value="15">15 minutes</option>
+        <option value="30">30 minutes</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="emergency-hint">
+    <span class="eyebrow">EMERGENCY</span>
+    <h2>Need out fast?</h2>
+    <p class="muted">
+      Hit ! anytime for a quick exit.
+    </p>
+  </div>
+</section>
 
     <section id="share" class="card shareView hidden">
       <button id="shareBackBtn" class="backBtn" type="button">← Home</button>
@@ -172,8 +179,8 @@
     </form>
   </dialog>
 
-  <div id="privacyShield" class="privacyShield hidden" role="button" tabindex="0" aria-label="Privacy blur active. Double tap to reveal.">
-    <div class="privacyShieldCard"><span class="privacyEye">◉</span><strong>Clock-it Twice</strong><small> on the screen.</small></div>
+  <div id="privacyShield" class="privacyShield hidden" role="button" tabindex="0" aria-label="Privacy screen active.">
+    <div class="privacyShieldCard" aria-hidden="true"></div>
   </div>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/app.js"></script>

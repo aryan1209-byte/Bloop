@@ -24,12 +24,13 @@ $('finishOnboarding').addEventListener('click',()=>{ localStorage.setItem(onboar
 const params = new URLSearchParams(location.search);
 const inviteRoomId = params.get('room');
 const inviteToken = params.get('invite');
-let pendingInvite = Boolean(inviteRoomId && inviteToken);
+const declinedInviteKey = inviteRoomId ? `justtwo:declinedInvite:${inviteRoomId}` : null;
+let pendingInvite = Boolean(inviteRoomId && inviteToken && localStorage.getItem(declinedInviteKey)!==inviteToken);
 let currentRoom = null, authToken = null, myRole = null, socket = null;
 let profiles = { creator:{displayName:'You',avatarUrl:null}, guest:{displayName:'Friend',avatarUrl:null} };
 let recorder=null, recordedChunks=[], recordTimer=null, recordStarted=0;
 let lastPresence={}, typingTimer=null, sentTyping=false, otherTyping=false;
-let homeRefreshTimer=null, homeRefreshBusy=false, lastHomeUnreadTotal=0, homeUnreadReady=false;
+let homeRefreshTimer=null, homeRefreshBusy=false, lastHomeUnreadTotal=0, homeUnreadReady=false, lastContactsSignature='';
 const storageKey=id=>`justtwo:${id}:auth`;
 const roleKey=id=>`justtwo:${id}:role`;
 const lastRoomKey='justtwo:lastRoom';
@@ -38,13 +39,24 @@ const identityKey='justtwo:identity:v1';
 const setupKey=(id,role)=>`justtwo:${id}:${role}:setup-v3`;
 function getRooms(){try{return [...new Set(JSON.parse(localStorage.getItem(roomsKey)||'[]'))];}catch{return[];}}
 function rememberRoom(id){const rooms=getRooms().filter(Boolean);if(!rooms.includes(id))rooms.unshift(id);localStorage.setItem(roomsKey,JSON.stringify(rooms.slice(0,30)));localStorage.setItem(lastRoomKey,id);}
+function forgetRoom(id){
+  const rooms=getRooms().filter(r=>r!==id);localStorage.setItem(roomsKey,JSON.stringify(rooms));
+  localStorage.removeItem(storageKey(id));localStorage.removeItem(roleKey(id));
+  for(const key of Object.keys(localStorage)){if(key.startsWith(`justtwo:${id}:`)&&key!==storageKey(id)&&key!==roleKey(id))localStorage.removeItem(key);}
+  if(localStorage.getItem(lastRoomKey)===id)localStorage.removeItem(lastRoomKey);
+  setupContacts({notify:false});
+}
+async function appHeartbeat(roomId,token){
+  if(document.hidden||document.body.classList.contains('privacyLocked'))return;
+  try{await fetch(`/api/rooms/${encodeURIComponent(roomId)}/heartbeat`,{method:'POST',headers:{'x-chat-token':token},cache:'no-store'});}catch{}
+}
 function getIdentity(){try{return JSON.parse(localStorage.getItem(identityKey)||'null');}catch{return null;}}
 function maybeShowIdentity(){if(getIdentity())return;setTimeout(()=>{if(!$('identityDialog').open)$('identityDialog').showModal();},120);}
 
 const THEMES = [
   {id:'midnight',name:'Midnight',note:'clean dark default'},
-  {id:'cursed',name:'JJK · Infinity',note:'Gojo / cursed violet'},
-  {id:'wisteria',name:'KNY · Water Night',note:'Giyu / deep teal'},
+  {id:'cursed',name:'JJK · Infinity',note:'deep cursed violet'},
+  {id:'wisteria',name:'KNY · Water Night',note:'deep water teal'},
   {id:'tokyo',name:'Tokyo Neon',note:'rain + neon signs'},
   {id:'sakura',name:'Sakura After Dark',note:'muted pink night'},
   {id:'cyber',name:'Cyber Alley',note:'electric blue shadows'},
@@ -74,13 +86,11 @@ function applyAppearance(){
   document.body.classList.remove('privacyEnabled');
   ['privacyToggle','dialogPrivacyToggle','setupPrivacyToggle'].forEach(id=>{if($(id))$(id).checked=Boolean(appearance.privacy);});
   ['idleBlurSelect','dialogIdleBlurSelect','setupIdleBlurSelect'].forEach(id=>{if($(id))$(id).value=String(Number.isFinite(Number(appearance.idleMinutes))?Number(appearance.idleMinutes):5);});
-  updateThemeMascot();
   resetIdleBlurTimer();
 }
 function themeCard(theme){
   const b=document.createElement('button'); b.type='button'; b.className='themeChoice'; b.dataset.themeChoice=theme.id;
-  const character=theme.id==='cursed'?'/assets/gojo-theme.jpg':theme.id==='wisteria'?'/assets/giyu-theme.jpg':'';
-  b.innerHTML=`<span class="themeSwatch theme-${theme.id}">${character?`<img class="themeCharacterThumb" src="${character}" alt="">`:''}</span><span><strong>${theme.name}</strong><small>${theme.note}</small></span>`;
+  b.innerHTML=`<span class="themeSwatch theme-${theme.id}"></span><span><strong>${theme.name}</strong><small>${theme.note}</small></span>`;
   b.onclick=()=>{appearance.theme=theme.id;applyAppearance();}; return b;
 }
 function colorDot(color){
@@ -97,12 +107,7 @@ $('shuffleVibe').onclick=()=>{appearance.theme=THEMES[Math.floor(Math.random()*T
 ['privacyToggle','dialogPrivacyToggle','setupPrivacyToggle'].forEach(id=>$(id)?.addEventListener('change',e=>{appearance.privacy=e.target.checked;applyAppearance();if(e.target.checked)engagePrivacyShield();}));
 ['idleBlurSelect','dialogIdleBlurSelect','setupIdleBlurSelect'].forEach(id=>$(id)?.addEventListener('change',e=>{appearance.idleMinutes=Math.max(0,Number(e.target.value)||0);applyAppearance();}));
 
-function updateThemeMascot(){
-  const m=$('themeMascot');if(!m)return;
-  const src=appearance.theme==='cursed'?'/assets/gojo-theme.jpg':appearance.theme==='wisteria'?'/assets/giyu-theme.jpg':'';
-  m.classList.toggle('hidden',!src);
-  if(src){m.src=src;m.className=`themeMascot mascot-${appearance.theme}`;}
-}
+function updateThemeMascot(){}
 function resetIdleBlurTimer(){
   clearTimeout(idleBlurTimer);idleBlurTimer=null;
   const mins=Number(appearance.idleMinutes)||0;
@@ -180,27 +185,36 @@ function contactPresence(data, role){
 function showHomeNotice(text){const n=$('homeNotice');if(!n)return;n.textContent=text;n.classList.remove('hidden');clearTimeout(showHomeNotice.t);showHomeNotice.t=setTimeout(()=>n.classList.add('hidden'),3200);}
 async function setupContacts({notify=false}={}){
   if(homeRefreshBusy)return;homeRefreshBusy=true;
-  const ids=getRooms(); $('contactsWidget').classList.toggle('hidden',ids.length===0); $('contactsList').innerHTML='';
-  const valid=[];let totalUnread=0;let newestName='Friend';
-  for(const id of ids){
-    const token=localStorage.getItem(storageKey(id)); if(!token)continue;
+  const ids=getRooms();
+  const results=await Promise.all(ids.map(async id=>{
+    const token=localStorage.getItem(storageKey(id));if(!token)return null;
     try{
-      const r=await fetch(`/api/rooms/${encodeURIComponent(id)}/messages`,{headers:{'x-chat-token':token},cache:'no-store'}); if(!r.ok)continue;
-      const data=await r.json(); valid.push(id); const role=data.role||localStorage.getItem(roleKey(id)); const other=role==='creator'?'guest':'creator'; const p=(data.profiles||{})[other]||{displayName:'Friend',avatarUrl:null,username:''};
-      const unread=Number(data.unreadCount||0);totalUnread+=unread;if(unread)newestName=p.displayName||'Friend';
-      const state=contactPresence(data,other);
-      const card=document.createElement('button');card.type='button';card.className='contactCard';
+      appHeartbeat(id,token);
+      const r=await fetch(`/api/rooms/${encodeURIComponent(id)}/messages`,{headers:{'x-chat-token':token},cache:'no-store'});if(!r.ok)return null;
+      const data=await r.json();const role=data.role||localStorage.getItem(roleKey(id));const other=role==='creator'?'guest':'creator';const p=(data.profiles||{})[other]||{displayName:'Friend',avatarUrl:null,username:''};
+      const unread=Number(data.unreadCount||0);const state=contactPresence(data,other);const last=data.messages?.at(-1);const sub=last?(last.type==='text'?(last.body||'Message').slice(0,55):last.type==='image'?'Photo':'Voice note'):'No messages yet';
+      return{id,token,p,unread,state,sub};
+    }catch{return null;}
+  }));
+  const valid=results.filter(Boolean);const validIds=valid.map(x=>x.id);let totalUnread=valid.reduce((n,x)=>n+x.unread,0);let newestName=valid.find(x=>x.unread)?.p?.displayName||'Friend';
+  if(validIds.length!==ids.length)localStorage.setItem(roomsKey,JSON.stringify(validIds));
+  const signature=JSON.stringify(valid.map(x=>[x.id,x.p.displayName,x.p.avatarUrl,x.p.username,x.unread,x.state.label,x.state.cls,x.sub]));
+  if(signature!==lastContactsSignature){
+    const frag=document.createDocumentFragment();
+    valid.forEach(({id,p,unread,state,sub})=>{
+      const card=document.createElement('div');card.className='contactCard';card.tabIndex=0;card.setAttribute('role','button');
       const imgWrap=document.createElement('span');imgWrap.className='contactAvatarWrap';
       const img=document.createElement('img');img.className='avatar continueAvatar';img.alt='';
       if(p.avatarUrl)img.src=p.avatarUrl;else{const initial=(p.displayName||'Friend').trim().charAt(0).toUpperCase()||'?';img.src=`data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="100%" height="100%" rx="48" fill="#23262b"/><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" fill="white" font-family="Arial" font-size="40" font-weight="700">${initial}</text></svg>`)}`;}
       const statusDot=document.createElement('span');statusDot.className=`presenceDot contactPresenceDot ${state.cls}`;imgWrap.append(img,statusDot);
-      const copy=document.createElement('span');copy.className='contactText';const last=data.messages?.at(-1);const sub=last?(last.type==='text'?(last.body||'Message').slice(0,55):last.type==='image'?'Photo':'Voice note'):'No messages yet';
-      copy.innerHTML=`<span class="contactNameRow"><strong>${escapeHtml(p.displayName||'Friend')}</strong><span class="contactStatus ${state.cls}">${escapeHtml(state.label)}</span></span><small>${p.username?'@'+escapeHtml(p.username)+' · ':''}${escapeHtml(sub)}</small>`;
-      const side=document.createElement('span');side.className='contactSide';if(unread){const badge=document.createElement('span');badge.className='unreadBadge';badge.textContent=unread===1?'1 new':`${unread} new`;side.append(badge);}const arrow=document.createElement('span');arrow.className='contactArrow';arrow.textContent='→';side.append(arrow);
-      card.append(imgWrap,copy,side);card.onclick=()=>resumeRoom(id,true);$('contactsList').append(card);
-    }catch{}
+      const copy=document.createElement('span');copy.className='contactText';copy.innerHTML=`<span class="contactNameRow"><strong>${escapeHtml(p.displayName||'Friend')}</strong><span class="contactStatus ${state.cls}">${escapeHtml(state.label)}</span></span><small>${p.username?'@'+escapeHtml(p.username)+' · ':''}${escapeHtml(sub)}</small>`;
+      const side=document.createElement('span');side.className='contactSide';if(unread){const badge=document.createElement('span');badge.className='unreadBadge';badge.textContent=unread===1?'1 new':`${unread} new`;side.append(badge);}
+      const remove=document.createElement('button');remove.type='button';remove.className='contactDelete';remove.title='Remove chat from this device';remove.setAttribute('aria-label','Remove chat from this device');remove.textContent='×';remove.onclick=e=>{e.stopPropagation();if(confirm(`Remove ${p.displayName||'this chat'} from this device? Messages on the server are not erased.`))forgetRoom(id);};side.append(remove);
+      const arrow=document.createElement('span');arrow.className='contactArrow';arrow.textContent='→';side.append(arrow);
+      card.append(imgWrap,copy,side);card.onclick=()=>resumeRoom(id,true);card.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();resumeRoom(id,true);}};frag.append(card);
+    });
+    $('contactsList').replaceChildren(frag);lastContactsSignature=signature;
   }
-  if(valid.length!==ids.length)localStorage.setItem(roomsKey,JSON.stringify(valid));
   $('contactsCount').textContent=valid.length?`${valid.length} saved`:'';$('contactsWidget').classList.toggle('hidden',valid.length===0);
   document.title=totalUnread?`(${totalUnread}) Just Two`:'Just Two';
   if(homeUnreadReady&&notify&&totalUnread>lastHomeUnreadTotal)showHomeNotice(`${totalUnread-lastHomeUnreadTotal} new message${totalUnread-lastHomeUnreadTotal===1?'':'s'} from ${newestName}`);
@@ -234,7 +248,7 @@ $('acceptInviteBtn').onclick=async()=>{
   localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);rememberRoom(currentRoom);
   history.replaceState({view:'home'},'','/'); await openChat(true);
 };
-$('declineInviteBtn').onclick=()=>{pendingInvite=false;history.replaceState({view:'home'},'','/');showInviteCard();};
+$('declineInviteBtn').onclick=()=>{if(declinedInviteKey&&inviteToken)localStorage.setItem(declinedInviteKey,inviteToken);pendingInvite=false;history.replaceState({view:'home'},'','/');showInviteCard();showHomeNotice('Invite disabled on this device.');};
 function fail(message){$('errorText').textContent=message;show('error');}
 async function resumeRoom(id,pushHistory=true){currentRoom=id;authToken=localStorage.getItem(storageKey(id));myRole=localStorage.getItem(roleKey(id));if(!authToken)return fail('This browser does not have access to that private chat.');await openChat(pushHistory);}
 async function openChat(pushHistory=true){
