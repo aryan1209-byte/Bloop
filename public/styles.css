@@ -570,3 +570,45 @@ html[data-theme="pearl"] .themeMascot,html[data-theme="cloud"] .themeMascot{opac
   .msg{border-radius:17px!important}
   #input{border-radius:19px!important}
 }
+
+
+/* v20: fixed full-page water, iPad keyboard/emoji dock, WhatsApp-like typing row, notification controls */
+html,body{min-height:100vh!important;min-height:100dvh!important;background:#4d87d3!important}
+body{position:relative!important;isolation:isolate!important;background:none!important;overflow-x:hidden!important}
+.pageWaterBg{position:fixed;inset:-2px;z-index:-5;pointer-events:none;background-color:#4d87d3;background-image:linear-gradient(rgba(5,19,45,.18),rgba(5,19,45,.18)),url('/assets/water-bg.jpg');background-size:cover;background-position:center center;background-repeat:no-repeat;transform:translateZ(0)}
+.shell{position:relative;z-index:1}
+@media(max-width:900px){.pageWaterBg{background-size:cover;background-position:center top}}
+
+/* Typing now lives in the message stream, so it pushes messages naturally instead of hovering on top of them. */
+#typingBubble{display:none!important}
+.typingMessageRow{display:flex;align-items:flex-end;gap:7px;max-width:82%;align-self:flex-start;margin:3px 0 8px;animation:typingRowIn .16s ease-out}
+.typingMessageRow .messageAvatar{width:28px;height:28px;flex:none}
+.typingDots{display:flex;align-items:center;gap:4px;min-width:50px;height:34px;padding:0 12px;border-radius:18px 18px 18px 6px;background:var(--their-bubble);border:1px solid var(--line);box-shadow:0 2px 8px rgba(0,0,0,.10)}
+.typingDots span{width:5px;height:5px;border-radius:50%;background:var(--muted);opacity:.45;animation:typingStreamDot 1.05s infinite ease-in-out}
+.typingDots span:nth-child(2){animation-delay:.14s}.typingDots span:nth-child(3){animation-delay:.28s}
+@keyframes typingStreamDot{0%,60%,100%{transform:translateY(0);opacity:.35}30%{transform:translateY(-3px);opacity:.9}}
+@keyframes typingRowIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+/* Alert controls */
+.alertSettings{display:grid;gap:10px}.alertsWidget .widgetHeading{margin-bottom:12px}.alertsWidget .switchRow{padding:9px 0;border-top:1px solid color-mix(in srgb,var(--line) 75%,transparent)}
+.dialogSection.alertSettings{gap:8px}.dialogSection.alertSettings .switchRow{padding:8px 0}
+
+/* iPad landscape: when typing, keep the composer small on the right so the conversation remains visible. */
+@media (min-width:700px) and (max-width:1200px) and (orientation:landscape){
+  body.ipadKeyboardOpen .shell{padding:6px!important;width:100%!important;max-width:none!important}
+  body.ipadKeyboardOpen #chat{height:calc(var(--visual-height,100dvh) - 10px)!important;max-height:none!important;border-radius:18px!important}
+  body.ipadKeyboardOpen .topbar{min-height:54px!important;padding:6px 10px!important}
+  body.ipadKeyboardOpen .messages{padding:12px 350px 14px 12px!important;scroll-padding-bottom:16px!important}
+  body.ipadKeyboardOpen .composer{position:absolute!important;right:12px!important;bottom:12px!important;width:326px!important;left:auto!important;z-index:70!important;border:1px solid var(--line)!important;border-radius:24px!important;padding:7px!important;box-shadow:0 14px 38px rgba(0,0,0,.28)!important;flex-wrap:wrap!important}
+  body.ipadKeyboardOpen .composer #input{order:1;width:100%!important;flex-basis:100%!important;min-height:42px!important;max-height:74px!important}
+  body.ipadKeyboardOpen .composer .toolBtn{width:34px!important;height:34px!important}
+  body.ipadKeyboardOpen .composer .send{width:36px!important;height:36px!important;margin-left:auto!important}
+  body.ipadKeyboardOpen .messageRow{max-width:94%!important}
+
+  /* Emoji picker becomes a right-side tray instead of covering the whole chat. */
+  body.emojiDockOpen .emojiTray{left:auto!important;right:12px!important;top:70px!important;bottom:72px!important;width:330px!important;max-height:none!important;border-radius:20px!important}
+  body.emojiDockOpen .messages{padding-right:354px!important}
+  body.emojiDockOpen .emojiGrid{grid-template-columns:repeat(5,1fr)!important}
+  body.emojiDockOpen .emojiHeader input{min-width:0!important}
+}
+@media(prefers-reduced-motion:reduce){.typingMessageRow,.typingDots span{animation:none!important}}

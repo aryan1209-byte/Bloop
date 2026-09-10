@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+  <div class="pageWaterBg" aria-hidden="true"></div>
   <div id="appChrome" class="appChrome" aria-hidden="false">
     <div id="clock" class="clockPill">--:--</div>
     <button id="privacyNowBtn" class="privacyNowBtn" type="button" aria-label="Blur screen now" title="Blur screen now">◉</button>
@@ -91,6 +92,14 @@
   </div>
 </section>
 
+<section class="homeWidget alertsWidget">
+  <div class="widgetHeading"><div><span class="eyebrow">ALERTS</span><h2>Notifications</h2></div></div>
+  <div class="alertSettings">
+    <label class="switchRow"><span>Message notifications</span><input id="notificationToggle" type="checkbox"><i></i></label>
+    <label class="switchRow"><span>Tiny message sound</span><input id="soundToggle" type="checkbox" checked><i></i></label>
+  </div>
+</section>
+
 <section>
    <div class="emergency-hint">
      <span class="eyebrow">EMERGENCY</span>
@@ -155,6 +164,7 @@
       <div class="dialogSection"><span class="dialogLabel">Theme</span><div id="dialogThemeGrid" class="themeGrid compact"></div></div>
       <div class="dialogSection"><span class="dialogLabel">My bubble colour</span><div id="dialogColorChoices" class="colorChoices"></div></div>
       <div class="dialogSection"><label class="idleSetting">Auto-blur after inactivity<select id="dialogIdleBlurSelect" aria-label="Auto blur after inactivity"><option value="0">Off</option><option value="1">1 minute</option><option value="2">2 minutes</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option></select></label></div>
+      <div class="dialogSection alertSettings"><label class="switchRow"><span>Message notifications</span><input id="dialogNotificationToggle" type="checkbox"><i></i></label><label class="switchRow"><span>Tiny message sound</span><input id="dialogSoundToggle" type="checkbox" checked><i></i></label></div>
       <button type="button" id="saveProfile" class="primary full">Save</button>
     </form>
   </dialog>
@@ -168,6 +178,7 @@
       <div class="dialogSection"><span class="dialogLabel">Pick a theme</span><div id="setupThemeGrid" class="themeGrid compact"></div></div>
       <div class="dialogSection"><span class="dialogLabel">Your message colour</span><div id="setupColorChoices" class="colorChoices"></div></div>
       <div class="dialogSection"><label class="idleSetting">Auto-blur after inactivity<select id="setupIdleBlurSelect" aria-label="Auto blur after inactivity"><option value="0">Off</option><option value="1">1 minute</option><option value="2">2 minutes</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option></select></label></div>
+      <div class="dialogSection alertSettings"><label class="switchRow"><span>Message notifications</span><input id="setupNotificationToggle" type="checkbox"><i></i></label><label class="switchRow"><span>Tiny message sound</span><input id="setupSoundToggle" type="checkbox" checked><i></i></label></div>
       <button type="button" id="finishSetup" class="primary full">Save & enter chat</button>
       <button type="button" id="skipSetup" class="textBtn full">Skip for now</button>
     </form>
