@@ -3,13 +3,30 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':
 const views = ['landing','share','chat','error'];
 const show = id => { views.forEach(v => $(v).classList.toggle('hidden', v !== id)); $('appChrome')?.classList.toggle('hidden', id === 'chat'); };
 
-// v11: lightweight animated ocean backdrop + liquid tap feedback
+// v12: curved SVG ocean backdrop with visible foam + spray
 function ensureOceanBackdrop(){
-  if(document.querySelector('.oceanBackdrop')) return;
+  document.querySelector('.oceanBackdrop')?.remove();
   const ocean=document.createElement('div');
-  ocean.className='oceanBackdrop';
+  ocean.className='oceanBackdrop oceanBackdropV12';
   ocean.setAttribute('aria-hidden','true');
-  ocean.innerHTML='<div class="oceanWave three"></div><div class="oceanWave two"></div><div class="oceanWave one"></div><div class="oceanFoam"></div>';
+  ocean.innerHTML=`
+    <svg class="oceanSvg oceanFar" viewBox="0 0 1600 300" preserveAspectRatio="none">
+      <path class="waterFar" d="M-100 210 C130 160 260 235 455 184 C650 132 770 222 970 174 C1175 125 1325 210 1710 145 L1710 320 L-100 320 Z"/>
+    </svg>
+    <svg class="oceanSvg oceanMid" viewBox="0 0 1600 300" preserveAspectRatio="none">
+      <path class="waterMid" d="M-120 226 C75 168 220 252 395 194 C570 136 725 245 900 184 C1070 126 1240 239 1398 176 C1515 130 1618 147 1720 168 L1720 320 L-120 320 Z"/>
+      <path class="foamLine foamMid" d="M-120 226 C75 168 220 252 395 194 C570 136 725 245 900 184 C1070 126 1240 239 1398 176 C1515 130 1618 147 1720 168"/>
+    </svg>
+    <svg class="oceanSvg oceanNear" viewBox="0 0 1600 300" preserveAspectRatio="none">
+      <path class="waterNear" d="M-160 252 C35 185 185 276 350 212 C535 142 665 270 842 198 C1025 125 1160 260 1335 194 C1500 130 1600 190 1760 150 L1760 330 L-160 330 Z"/>
+      <path class="foamLine foamNear" d="M-160 252 C35 185 185 276 350 212 C535 142 665 270 842 198 C1025 125 1160 260 1335 194 C1500 130 1600 190 1760 150"/>
+    </svg>
+    <div class="oceanSpray">
+      <i style="--x:9%;--y:48%;--d:.1s"></i><i style="--x:12%;--y:42%;--d:.45s"></i><i style="--x:24%;--y:57%;--d:.8s"></i>
+      <i style="--x:38%;--y:39%;--d:.25s"></i><i style="--x:41%;--y:34%;--d:.65s"></i><i style="--x:55%;--y:52%;--d:.95s"></i>
+      <i style="--x:67%;--y:36%;--d:.35s"></i><i style="--x:70%;--y:31%;--d:.75s"></i><i style="--x:83%;--y:49%;--d:.15s"></i>
+      <i style="--x:91%;--y:34%;--d:.55s"></i>
+    </div>`;
   document.body.prepend(ocean);
 }
 ensureOceanBackdrop();

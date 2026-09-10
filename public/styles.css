@@ -237,3 +237,68 @@ html[data-theme="aurora"] .oceanWave.one{background:linear-gradient(180deg,rgba(
 @media(prefers-reduced-motion:reduce){
   .oceanWave,.oceanFoam,.oceanFoam:after,.messages:before{animation:none!important}.contactCard,.themeChoice,button{transition:none!important}.liquidTapRipple{display:none!important}
 }
+
+/* v12: more natural ocean + cleaner theme glass */
+:root{
+  --ocean-far:rgba(45,92,129,.30);
+  --ocean-mid:rgba(35,115,165,.38);
+  --ocean-near:rgba(20,77,119,.52);
+  --ocean-foam:rgba(255,255,255,.88);
+}
+html,body{background:var(--bg)!important}
+body:before{
+  background:
+    radial-gradient(circle at 16% 8%,color-mix(in srgb,var(--accent) 9%,transparent),transparent 34%),
+    radial-gradient(circle at 84% 18%,color-mix(in srgb,var(--accent) 5%,transparent),transparent 28%),
+    linear-gradient(180deg,color-mix(in srgb,var(--bg) 94%,#101722 6%),var(--bg) 58%,color-mix(in srgb,var(--bg) 90%,#071722 10%))!important;
+}
+
+/* Kill the old flat bands/foam completely. */
+.oceanBackdrop:not(.oceanBackdropV12) .oceanWave,
+.oceanBackdrop:not(.oceanBackdropV12) .oceanFoam{display:none!important}
+.oceanBackdropV12{position:fixed;inset:auto 0 0 0;height:min(36vh,390px);min-height:235px;z-index:-3;overflow:hidden;pointer-events:none;opacity:.96;filter:none}
+.oceanSvg{position:absolute;left:-7%;bottom:-2px;width:114%;height:100%;overflow:visible;will-change:transform}
+.oceanFar{opacity:.52;animation:oceanFarMove 14s ease-in-out infinite alternate}
+.oceanMid{opacity:.72;animation:oceanMidMove 9.5s ease-in-out infinite alternate}
+.oceanNear{opacity:.92;animation:oceanNearMove 6.8s ease-in-out infinite alternate}
+.waterFar{fill:var(--ocean-far)}
+.waterMid{fill:var(--ocean-mid)}
+.waterNear{fill:var(--ocean-near)}
+.foamLine{fill:none;stroke:var(--ocean-foam);stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;filter:drop-shadow(0 0 5px rgba(255,255,255,.16))}
+.foamMid{stroke-width:2.1;stroke-dasharray:72 16 31 24 112 20;opacity:.46;animation:foamSlide 7s linear infinite}
+.foamNear{stroke-width:4.2;stroke-dasharray:126 18 48 15 180 24;opacity:.86;animation:foamSlide 5.2s linear infinite reverse}
+.oceanSpray{position:absolute;inset:0;overflow:hidden}
+.oceanSpray i{position:absolute;left:var(--x);top:var(--y);width:5px;height:8px;border-radius:55% 45% 50% 50%;background:rgba(255,255,255,.88);box-shadow:0 0 10px rgba(255,255,255,.18);opacity:0;transform:translate(-50%,12px) rotate(18deg) scale(.6);animation:sprayPop 3.1s ease-out infinite;animation-delay:var(--d)}
+.oceanSpray i:nth-child(3n){width:3px;height:5px}.oceanSpray i:nth-child(2n){animation-duration:3.7s}
+@keyframes oceanFarMove{0%{transform:translate3d(-1.5%,9px,0) scaleY(.97)}100%{transform:translate3d(1.8%,-5px,0) scaleY(1.035)}}
+@keyframes oceanMidMove{0%{transform:translate3d(2.2%,12px,0) scaleY(.95)}100%{transform:translate3d(-2.4%,-13px,0) scaleY(1.055)}}
+@keyframes oceanNearMove{0%{transform:translate3d(-2.8%,18px,0) scaleY(.94)}100%{transform:translate3d(2.3%,-17px,0) scaleY(1.07)}}
+@keyframes foamSlide{to{stroke-dashoffset:-310}}
+@keyframes sprayPop{0%,57%,100%{opacity:0;transform:translate(-50%,12px) rotate(18deg) scale(.5)}63%{opacity:.95}72%{opacity:.7;transform:translate(calc(-50% + 8px),-26px) rotate(-14deg) scale(1)}84%{opacity:0;transform:translate(calc(-50% + 17px),-43px) rotate(-28deg) scale(.7)}}
+
+/* Theme-aware water. Each theme changes smoothly without washing the whole UI. */
+html[data-theme="cursed"]{--ocean-far:rgba(75,45,118,.28);--ocean-mid:rgba(99,61,155,.36);--ocean-near:rgba(48,31,86,.50)}
+html[data-theme="wisteria"]{--ocean-far:rgba(24,87,104,.30);--ocean-mid:rgba(32,123,143,.42);--ocean-near:rgba(17,76,96,.56)}
+html[data-theme="tokyo"]{--ocean-far:rgba(20,74,111,.28);--ocean-mid:rgba(35,112,151,.36);--ocean-near:rgba(48,51,110,.48)}
+html[data-theme="sakura"]{--ocean-far:rgba(91,43,78,.26);--ocean-mid:rgba(113,53,96,.34);--ocean-near:rgba(65,35,70,.48)}
+html[data-theme="cyber"]{--ocean-far:rgba(12,65,104,.30);--ocean-mid:rgba(18,102,153,.40);--ocean-near:rgba(9,59,98,.54)}
+html[data-theme="aurora"]{--ocean-far:rgba(20,83,76,.28);--ocean-mid:rgba(31,119,103,.38);--ocean-near:rgba(17,72,75,.52)}
+html[data-theme="storm"]{--ocean-far:rgba(57,67,82,.26);--ocean-mid:rgba(68,82,100,.34);--ocean-near:rgba(38,50,66,.50)}
+html[data-theme="mono"]{--ocean-far:rgba(70,75,82,.22);--ocean-mid:rgba(95,101,110,.28);--ocean-near:rgba(47,52,60,.44)}
+
+/* Glass now follows the selected theme instead of staying grey/purple. */
+.card,.homeWidget,.inviteCard,.continueCard,.contactCard,.shareView,.chat,.profileDialog .dialogCard,.lockPanel,.onboardingPanel{
+  background:linear-gradient(145deg,
+    color-mix(in srgb,var(--panel) 86%,white 4%),
+    color-mix(in srgb,var(--panel) 76%,transparent))!important;
+  border-color:color-mix(in srgb,var(--line) 72%,white 10%)!important;
+}
+.homeWidget{background:color-mix(in srgb,var(--panel) 76%,transparent)!important}
+.contactCard,.themeChoice{background:color-mix(in srgb,var(--soft) 74%,transparent)!important}
+.topbar{background:color-mix(in srgb,var(--panel) 78%,transparent)!important}
+.composer{background:color-mix(in srgb,var(--panel) 82%,transparent)!important}
+.clockPill{background:color-mix(in srgb,var(--panel) 72%,transparent)!important}
+.messages{background:linear-gradient(180deg,color-mix(in srgb,var(--wallpaper) 90%,transparent),color-mix(in srgb,var(--bg) 84%,transparent))!important}
+
+@media(max-width:650px){.oceanBackdropV12{height:30vh;min-height:190px}.foamNear{stroke-width:3.4}}
+@media(prefers-reduced-motion:reduce){.oceanFar,.oceanMid,.oceanNear,.foamLine,.oceanSpray i{animation:none!important}.oceanSpray{display:none}}
