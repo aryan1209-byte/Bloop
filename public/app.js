@@ -1,7 +1,7 @@
 const $ = id => document.getElementById(id);
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const views = ['landing','share','chat','error'];
-const show = id => { views.forEach(v => $(v).classList.toggle('hidden', v !== id)); $('appChrome')?.classList.toggle('hidden', id === 'chat'); };
+const show = id => { views.forEach(v => $(v).classList.toggle('hidden', v !== id)); $('appChrome')?.classList.toggle('hidden', id === 'chat'); document.body.classList.toggle('chatOpen',id==='chat'); };
 
 // v13: full-screen flowing-water backdrop inspired by the supplied reference
 function ensureOceanBackdrop(){
@@ -575,6 +575,85 @@ async function joinByCode(){
   }catch{if(status)status.textContent='Could not connect. Try again.';}
 }
 $('joinCodeBtn')?.addEventListener('click',joinByCode);$('joinCodeInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();joinByCode();}});
+
+function formatDeviceTransferCode(value){
+  const raw=String(value||'').toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,10);
+  return raw.length>5?`${raw.slice(0,5)}-${raw.slice(5)}`:raw;
+}
+$('deviceTransferInput')?.addEventListener('input',e=>{
+  e.target.value=formatDeviceTransferCode(e.target.value);
+  if($('deviceTransferStatus'))$('deviceTransferStatus').textContent='';
+});
+async function redeemDeviceTransferCode(){
+  const input=$('deviceTransferInput'),status=$('deviceTransferStatus');
+  const code=formatDeviceTransferCode(input?.value);
+  if(code.replace('-','').length!==10){if(status)status.textContent='Enter the full 10-character device code.';return;}
+  if(status)status.textContent='Connecting this device…';
+  try{
+    const r=await fetch('/api/device-transfer/redeem',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code})});
+    const data=await r.json();
+    if(!r.ok){if(status)status.textContent=data.error||'Could not continue that chat.';return;}
+    currentRoom=data.roomId;authToken=data.authToken;myRole=data.role;
+    localStorage.setItem(storageKey(currentRoom),authToken);
+    localStorage.setItem(roleKey(currentRoom),myRole);
+    rememberRoom(currentRoom);
+    if(status)status.textContent='Connected ✓';
+    await openChat(true);
+  }catch{
+    if(status)status.textContent='Could not connect. Try again.';
+  }
+}
+$('deviceTransferBtn')?.addEventListener('click',redeemDeviceTransferCode);
+$('deviceTransferInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();redeemDeviceTransferCode();}});
+
+let deviceTransferExpiryTimer=null;
+function renderDeviceTransferExpiry(expiresAt){
+  clearInterval(deviceTransferExpiryTimer);
+  const el=$('deviceTransferExpiry');
+  const tick=()=>{
+    const ms=Number(expiresAt)-Date.now();
+    if(!el)return;
+    if(ms<=0){el.textContent='This code has expired. Tap New code.';clearInterval(deviceTransferExpiryTimer);return;}
+    const mins=Math.floor(ms/60000),secs=Math.floor((ms%60000)/1000);
+    el.textContent=`Expires in ${mins}:${String(secs).padStart(2,'0')}`;
+  };
+  tick();deviceTransferExpiryTimer=setInterval(tick,1000);
+}
+async function createDeviceTransferCode(){
+  if(!currentRoom||!authToken)return;
+  const codeEl=$('deviceTransferCode'),expiry=$('deviceTransferExpiry');
+  if(codeEl)codeEl.textContent='Creating…';
+  if(expiry)expiry.textContent='';
+  try{
+    const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/device-transfer-code`,{
+      method:'POST',headers:{'x-chat-token':authToken}
+    });
+    const data=await r.json();
+    if(!r.ok){if(codeEl)codeEl.textContent='Could not create code';return;}
+    if(codeEl)codeEl.textContent=data.code;
+    renderDeviceTransferExpiry(data.expiresAt);
+  }catch{
+    if(codeEl)codeEl.textContent='Could not connect';
+  }
+}
+$('linkDeviceBtn')?.addEventListener('click',async()=>{
+  const dlg=$('deviceTransferDialog');
+  if(!dlg)return;
+  dlg.showModal();
+  await createDeviceTransferCode();
+});
+$('newDeviceTransferCode')?.addEventListener('click',createDeviceTransferCode);
+$('copyDeviceTransferCode')?.addEventListener('click',async()=>{
+  const code=$('deviceTransferCode')?.textContent?.trim();
+  if(!code||code==='—'||code.includes('Creating')||code.includes('Could not'))return;
+  try{
+    await navigator.clipboard.writeText(code);
+    const btn=$('copyDeviceTransferCode');
+    btn.textContent='Copied ✓';
+    setTimeout(()=>btn.textContent='Copy code',1000);
+  }catch{}
+});
+
 $('enterBtn').onclick=()=>{
   rememberRoom(currentRoom);
   openChat(true);
@@ -610,8 +689,8 @@ async function openChat(pushHistory=true){
   maybeShowSetup();
 }
 function maybeShowSetup(){
-  if(!currentRoom||!myRole||localStorage.getItem(setupKey(currentRoom,myRole))==='done')return;
-  refreshHeader();applyAppearance();setTimeout(()=>{if(!$('setupDialog').open)$('setupDialog').showModal();},180);
+  // v32: customization is manual from the profile button; never interrupt chat entry.
+  if(currentRoom&&myRole)localStorage.setItem(setupKey(currentRoom,myRole),'done');
 }
 
 function connectSocket(){
@@ -759,7 +838,7 @@ function markDeleted(id){document.querySelector(`.messageRow[data-id="${id}"]`)?
 function updateReactions(id,reactions){const bar=document.querySelector(`.messageRow[data-id="${id}"] .reactions`);if(!bar)return;bar.innerHTML='';const groups=new Map();reactions.forEach(r=>groups.set(r.emoji,(groups.get(r.emoji)||0)+1));groups.forEach((count,emoji)=>{const b=document.createElement('button');b.type='button';b.textContent=`${emoji}${count>1?' '+count:''}`;b.onclick=()=>socket?.emit('react',{messageId:id,emoji});bar.append(b);});}
 function openReactionMenu(target,messageId,longPress=false){
   document.querySelector('.reactionMenu')?.remove();const menu=document.createElement('div');menu.className=`reactionMenu${longPress?' reactionMenuLong':''}`;
-  const head=document.createElement('div');head.className='reactionHead';head.innerHTML='<strong>Message</strong><span><button type="button" class="replyMenuBtn">Reply</button><button type="button" class="closeReactionBtn">×</button></span>';head.querySelector('.replyMenuBtn').onclick=()=>{const row=document.querySelector(`.messageRow[data-id="${messageId}"]`);const cached=row?{id:Number(messageId),sender:row.dataset.sender,type:row.dataset.type||'text',body:row.dataset.body||'',mediaUrl:row.dataset.mediaUrl||null}:null;if(cached)startReply(cached);menu.remove();};head.querySelector('.closeReactionBtn').onclick=()=>menu.remove();menu.append(head);
+  const head=document.createElement('div');head.className='reactionHead';head.innerHTML='<strong>Message</strong><span><button type="button" class="replyMenuBtn">Reply</button><button type="button" class="closeReactionBtn">×</button></span>';head.querySelector('.replyMenuBtn').onclick=()=>{const row=document.querySelector(`.messageRow[data-id="${messageId}"]`);const cached=row?{id:Number(messageId),sender:row.dataset.sender,type:row.dataset.type||'text',body:row.dataset.body||'',mediaUrl:row.dataset.mediaUrl||null}:null;if(cached)startReply(cached);menu.remove();};head.querySelector('.closeReactionBtn').onclick=()=>menu.remove();const ownRow=document.querySelector(`.messageRow[data-id="${messageId}"]`);if(ownRow?.dataset.sender===myRole){const del=document.createElement('button');del.type='button';del.className='reactionDeleteBtn';del.textContent='Delete';del.onclick=()=>{if(confirm('Delete this message? It will disappear from the chat.'))socket?.emit('delete-message',Number(messageId));menu.remove();};head.querySelector('span').prepend(del);}menu.append(head);
   const grid=document.createElement('div');grid.className='reactionGrid';reactionChoices.forEach(emoji=>{const b=document.createElement('button');b.type='button';b.textContent=emoji;b.onclick=e=>{e.stopPropagation();socket?.emit('react',{messageId,emoji});reactionBurst(emoji);menu.remove();};grid.append(b);});menu.append(grid);
   document.body.append(menu);const rect=target.getBoundingClientRect();const width=Math.min(390,window.innerWidth-20);menu.style.width=`${width}px`;menu.style.left=`${Math.max(10,Math.min(window.innerWidth-width-10,rect.left+rect.width/2-width/2))}px`;menu.style.top=`${Math.max(10,Math.min(window.innerHeight-330,rect.top-90))}px`;
   setTimeout(()=>document.addEventListener('pointerdown',e=>{if(!menu.contains(e.target))menu.remove();},{once:true}),0);
@@ -810,8 +889,32 @@ function stopRecording(){if(recorder&&recorder.state!=='inactive')recorder.stop(
 $('cancelRecord').onclick=()=>{stopRecording();recordedChunks=[];};$('sendRecord').onclick=async()=>{if(!recorder)return;const type=recorder.mimeType||'audio/webm';stopRecording();await new Promise(r=>setTimeout(r,80));const blob=new Blob(recordedChunks,{type});recordedChunks=[];if(blob.size)await uploadMedia('audio',blob);};
 
 async function uploadAvatarFrom(inputId){const file=$(inputId).files[0];if(!file)return null;const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/upload/avatar`,{method:'POST',headers:{'x-chat-token':authToken,'content-type':file.type},body:file});const data=await r.json();if(!r.ok){alert(data.error||'Could not upload photo.');return null;}profiles[myRole]=data;refreshHeader();$(inputId).value='';return data;}
-$('profileBtn').onclick=()=>{refreshHeader();applyAppearance();$('profileDialog').showModal();};$('avatarPick').onclick=()=>$('avatarInput').click();$('avatarInput').onchange=()=>uploadAvatarFrom('avatarInput');
-$('saveProfile').onclick=()=>{$('profileDialog').close();};
+$('profileBtn').onclick=()=>{
+  refreshHeader();applyAppearance();
+  const identity=getIdentity()||{};const mine=profiles[myRole]||{};
+  if($('profileDisplayName'))$('profileDisplayName').value=identity.name||mine.displayName||'';
+  if($('profileUsername'))$('profileUsername').value=identity.username||mine.username||'';
+  if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='';
+  $('profileDialog').showModal();
+};
+$('avatarPick').onclick=()=>$('avatarInput').click();$('avatarInput').onchange=()=>uploadAvatarFrom('avatarInput');
+async function saveIdentityAcrossChats(name,username){
+  localStorage.setItem(identityKey,JSON.stringify({name,username}));
+  const rooms=getRooms();
+  await Promise.allSettled(rooms.map(async id=>{
+    const token=localStorage.getItem(storageKey(id));if(!token)return;
+    await fetch(`/api/rooms/${encodeURIComponent(id)}/profile`,{method:'PATCH',headers:{'content-type':'application/json','x-chat-token':token},body:JSON.stringify({displayName:name,username})});
+  }));
+  if(currentRoom&&myRole){profiles[myRole]={...(profiles[myRole]||{}),displayName:name,username};refreshHeader();}
+}
+$('saveProfile').onclick=async()=>{
+  const name=$('profileDisplayName')?.value.trim().slice(0,24)||'';
+  const username=$('profileUsername')?.value.trim().replace(/^@+/,'').replace(/[^a-zA-Z0-9_.]/g,'').slice(0,20)||'';
+  if(!name||!username){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='Add both a name and username.';return;}
+  const btn=$('saveProfile');btn.disabled=true;btn.textContent='Saving…';
+  try{await saveIdentityAcrossChats(name,username);if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='Saved ✓';setTimeout(()=>$('profileDialog').close(),180);}
+  finally{btn.disabled=false;btn.textContent='Save';}
+};
 async function syncIdentityToRoom(){
   const identity=getIdentity();if(!identity||!currentRoom||!authToken)return true;
   const mine=profiles[myRole]||{};if(mine.displayName===identity.name&&mine.username===identity.username)return true;
@@ -934,3 +1037,10 @@ function installSwipeToReply(){
 installSwipeToReply();
 
 
+
+document.addEventListener('visibilitychange',()=>{
+  if(!socket?.connected)return;
+  socket.emit(document.hidden?'presence-away':'presence-back');
+});
+window.addEventListener('pagehide',()=>{if(socket?.connected)socket.emit('presence-away');});
+window.addEventListener('pageshow',()=>{if(socket?.connected)socket.emit('presence-back');});

@@ -24,3 +24,18 @@ Removing a contact now changes the chat state for both people instead of only de
 - Kept the small version badge and updated it to Bloop v30.
 - Once the invited person accepts a chat, the original invite link can be opened on their iPad/laptop to resume the same guest chat.
 - The original phone session stays valid; handoff does not replace its guest token.
+
+## v31 Cross-device continuation
+- The original invite link is only for accepting the chat. It is no longer a reusable cross-device login.
+- Inside any chat, tap the ⇄ Link another device button to create a one-time 10-character device code.
+- On another device, open the normal Bloop home page and use Continue a chat from another device.
+- The code expires after 10 minutes and works once.
+- Redeeming the code creates a separate access token, so both the phone and the iPad can stay signed in to the same chat.
+
+## v32 phone UI + profile fixes
+- Rebuilt the narrow-phone chat layout so header identity, presence/last-seen, controls, code, messages, voice notes, and composer no longer overlap.
+- Floating message actions are hidden on phones; swipe-to-reply and long-press reactions remain, with Delete available in the long-press menu for your own messages.
+- Added editable Name and Username fields in Customize/Profile and sync them across locally saved chats.
+- Disabled the automatic per-chat theme/customization popup. Theme changes are manual from Customize.
+- Added explicit background/foreground presence events so last-seen updates when the app is hidden and online returns when it is visible.
+- Version badge moved above the phone composer while a chat is open.

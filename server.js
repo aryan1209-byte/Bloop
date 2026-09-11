@@ -79,6 +79,27 @@ CREATE TABLE IF NOT EXISTS app_settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS room_access_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  room_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK(role IN ('creator','guest')),
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at INTEGER NOT NULL,
+  last_used_at INTEGER,
+  FOREIGN KEY(room_id) REFERENCES rooms(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS device_transfer_codes (
+  code_hash TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK(role IN ('creator','guest')),
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at INTEGER,
+  FOREIGN KEY(room_id) REFERENCES rooms(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_room_access_tokens_room ON room_access_tokens(room_id, role);
+CREATE INDEX IF NOT EXISTS idx_device_transfer_codes_expiry ON device_transfer_codes(expires_at);
+
 CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id, id);
 `);
 
@@ -145,6 +166,20 @@ function makeJoinCode(){
   return `${raw.slice(0,4)}-${raw.slice(4)}`;
 }
 const normalizeJoinCode = value => String(value||'').toUpperCase().replace(/[^A-Z2-9]/g,'');
+const DEVICE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function makeDeviceTransferCode(){
+  let raw='';
+  for(let i=0;i<10;i++) raw += DEVICE_CODE_ALPHABET[crypto.randomInt(0, DEVICE_CODE_ALPHABET.length)];
+  return `${raw.slice(0,5)}-${raw.slice(5)}`;
+}
+const normalizeDeviceTransferCode = value => String(value||'').toUpperCase().replace(/[^A-Z2-9]/g,'');
+function issueAdditionalAccessToken(roomId, role){
+  const authToken = token(32);
+  db.prepare(`INSERT INTO room_access_tokens(room_id, role, token_hash, created_at, last_used_at)
+              VALUES (?, ?, ?, ?, ?)`).run(roomId, role, sha256(authToken), Date.now(), Date.now());
+  return authToken;
+}
+
 const cleanName = value => String(value || '').trim().slice(0, 24);
 const cleanUsername = value => String(value || '').trim().replace(/^@+/,'').replace(/[^a-zA-Z0-9_.]/g,'').slice(0,20);
 
@@ -155,10 +190,11 @@ function authenticate(roomId, authToken) {
   const h = sha256(authToken);
   if (h === room.creator_token_hash) return { room, role: 'creator' };
   if (room.guest_token_hash && h === room.guest_token_hash) return { room, role: 'guest' };
-  // After an invite has been accepted, the original invite link also acts as
-  // the guest's cross-device access credential. This lets the same person
-  // open that invite on an iPad/laptop without kicking their phone out.
-  if (room.invite_status === 'accepted' && h === room.share_token_hash) return { room, role: 'guest' };
+  const extra = db.prepare('SELECT role FROM room_access_tokens WHERE room_id = ? AND token_hash = ?').get(roomId, h);
+  if (extra) {
+    db.prepare('UPDATE room_access_tokens SET last_used_at = ? WHERE room_id = ? AND token_hash = ?').run(Date.now(), roomId, h);
+    return { room, role: extra.role };
+  }
   return null;
 }
 
@@ -224,9 +260,12 @@ function serializeMessages(roomId) {
 function presencePayload(roomId) {
   const socketIds = io.sockets.adapter.rooms.get(roomId) || new Set();
   const onlineRoles = new Set();
+  const unavailableRoles = new Set();
   for (const socketId of socketIds) {
     const s = io.sockets.sockets.get(socketId);
-    if (s?.data?.role) onlineRoles.add(s.data.role);
+    if (!s?.data?.role) continue;
+    if (s.data.presenceAvailable === false) unavailableRoles.add(s.data.role);
+    else onlineRoles.add(s.data.role);
   }
   const rows = db.prepare('SELECT role, last_seen AS lastSeen, activity_status AS activityStatus, status_at AS statusAt FROM profiles WHERE room_id = ?').all(roomId);
   const lastSeen = { creator: null, guest: null };
@@ -235,7 +274,7 @@ function presencePayload(roomId) {
   const recentCutoff = Date.now() - 5500;
   for (const row of rows) {
     lastSeen[row.role] = row.lastSeen || null; activity[row.role] = row.activityStatus || null; statusAt[row.role] = row.statusAt || null;
-    if (row.lastSeen && row.lastSeen >= recentCutoff && row.activityStatus !== 'emergency') onlineRoles.add(row.role);
+    if (row.lastSeen && row.lastSeen >= recentCutoff && row.activityStatus !== 'emergency' && !unavailableRoles.has(row.role)) onlineRoles.add(row.role);
   }
   return { online: [...onlineRoles], lastSeen, activity, statusAt };
 }
@@ -353,6 +392,55 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
   if (!result.changes) return res.status(403).json({ error: 'This chat already has its two people.' });
   db.prepare(`INSERT OR IGNORE INTO profiles (room_id, role, display_name) VALUES (?, 'guest', 'Friend')`).run(roomId);
   res.json({ role: 'guest', authToken: guestToken });
+});
+
+
+app.post('/api/rooms/:roomId/device-transfer-code', (req, res) => {
+  if (appLocked()) return res.status(423).json({ error: 'Bloop is locked.' });
+  const auth = authRequest(req);
+  if (!auth) return res.status(401).json({ error: 'Not allowed.' });
+
+  // Remove expired/old unused codes for this room+role, then issue a fresh one.
+  const now = Date.now();
+  db.prepare('DELETE FROM device_transfer_codes WHERE expires_at < ? OR used_at IS NOT NULL').run(now);
+  db.prepare('DELETE FROM device_transfer_codes WHERE room_id = ? AND role = ?').run(req.params.roomId, auth.role);
+
+  let code = null;
+  for (let tries = 0; tries < 20; tries++) {
+    const candidate = makeDeviceTransferCode();
+    const hash = sha256(normalizeDeviceTransferCode(candidate));
+    const exists = db.prepare('SELECT 1 FROM device_transfer_codes WHERE code_hash = ?').get(hash);
+    if (!exists) { code = candidate; break; }
+  }
+  if (!code) return res.status(500).json({ error: 'Could not create a device code.' });
+
+  const expiresAt = now + 10 * 60 * 1000;
+  db.prepare(`INSERT INTO device_transfer_codes(code_hash, room_id, role, created_at, expires_at)
+              VALUES (?, ?, ?, ?, ?)`)
+    .run(sha256(normalizeDeviceTransferCode(code)), req.params.roomId, auth.role, now, expiresAt);
+
+  res.json({ code, expiresAt, roomId: req.params.roomId, role: auth.role });
+});
+
+app.post('/api/device-transfer/redeem', (req, res) => {
+  if (appLocked()) return res.status(423).json({ error: 'Bloop is locked.' });
+  const normalized = normalizeDeviceTransferCode(req.body?.code);
+  if (normalized.length !== 10) return res.status(400).json({ error: 'Enter the full device code.' });
+
+  const now = Date.now();
+  const row = db.prepare(`SELECT code_hash AS codeHash, room_id AS roomId, role, expires_at AS expiresAt, used_at AS usedAt
+                          FROM device_transfer_codes WHERE code_hash = ?`)
+    .get(sha256(normalized));
+  if (!row) return res.status(404).json({ error: 'That device code is not valid.' });
+  if (row.usedAt) return res.status(410).json({ error: 'That device code was already used.' });
+  if (row.expiresAt < now) {
+    db.prepare('DELETE FROM device_transfer_codes WHERE code_hash = ?').run(row.codeHash);
+    return res.status(410).json({ error: 'That device code expired. Make a new one on your other device.' });
+  }
+
+  const authToken = issueAdditionalAccessToken(row.roomId, row.role);
+  db.prepare('UPDATE device_transfer_codes SET used_at = ? WHERE code_hash = ?').run(now, row.codeHash);
+  res.json({ roomId: row.roomId, role: row.role, authToken });
 });
 
 app.post('/api/rooms/:roomId/decline', (req, res) => {
@@ -511,6 +599,7 @@ io.use((socket, next) => {
   if (!auth) return next(new Error('unauthorized'));
   socket.data.roomId = roomId;
   socket.data.role = auth.role;
+  socket.data.presenceAvailable = true;
   next();
 });
 
@@ -519,6 +608,17 @@ io.on('connection', socket => {
   socket.join(roomId);
   db.prepare('UPDATE profiles SET last_seen = ?, activity_status = NULL, status_at = ? WHERE room_id = ? AND role = ?').run(Date.now(), Date.now(), roomId, role);
   emitPresence(roomId);
+
+  socket.on('presence-away', () => {
+    socket.data.presenceAvailable = false;
+    db.prepare(`UPDATE profiles SET last_seen = ?, activity_status = CASE WHEN activity_status = 'emergency' THEN activity_status ELSE NULL END, status_at = ? WHERE room_id = ? AND role = ?`).run(Date.now(), Date.now(), roomId, role);
+    emitPresence(roomId);
+  });
+  socket.on('presence-back', () => {
+    socket.data.presenceAvailable = true;
+    db.prepare('UPDATE profiles SET last_seen = ?, status_at = ? WHERE room_id = ? AND role = ?').run(Date.now(), Date.now(), roomId, role);
+    emitPresence(roomId);
+  });
 
   socket.on('typing', value => {
     const typing = Boolean(value);
