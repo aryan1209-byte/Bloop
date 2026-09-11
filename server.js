@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS rooms (
   share_token_hash TEXT NOT NULL UNIQUE,
   join_code_hash TEXT UNIQUE,
   join_code TEXT,
+  quick_code_hash TEXT UNIQUE,
+  quick_code TEXT,
   creator_token_hash TEXT NOT NULL,
   guest_token_hash TEXT,
   invite_status TEXT NOT NULL DEFAULT 'pending',
@@ -88,6 +90,15 @@ CREATE TABLE IF NOT EXISTS room_access_tokens (
   last_used_at INTEGER,
   FOREIGN KEY(room_id) REFERENCES rooms(id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS room_device_pins (
+  room_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK(role IN ('creator','guest')),
+  pin_hash TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(room_id, role),
+  FOREIGN KEY(room_id) REFERENCES rooms(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS device_transfer_codes (
   code_hash TEXT PRIMARY KEY,
   room_id TEXT NOT NULL,
@@ -99,6 +110,13 @@ CREATE TABLE IF NOT EXISTS device_transfer_codes (
 );
 CREATE INDEX IF NOT EXISTS idx_room_access_tokens_room ON room_access_tokens(room_id, role);
 CREATE INDEX IF NOT EXISTS idx_device_transfer_codes_expiry ON device_transfer_codes(expires_at);
+
+
+CREATE TABLE IF NOT EXISTS people (id TEXT PRIMARY KEY,username TEXT NOT NULL COLLATE NOCASE UNIQUE,display_name TEXT NOT NULL,owner_token_hash TEXT NOT NULL UNIQUE,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS friend_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,sender_id TEXT NOT NULL,receiver_id TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','declined')),created_at INTEGER NOT NULL,responded_at INTEGER,UNIQUE(sender_id,receiver_id),FOREIGN KEY(sender_id) REFERENCES people(id) ON DELETE CASCADE,FOREIGN KEY(receiver_id) REFERENCES people(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS friendships (person_a TEXT NOT NULL,person_b TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(person_a,person_b),FOREIGN KEY(person_a) REFERENCES people(id) ON DELETE CASCADE,FOREIGN KEY(person_b) REFERENCES people(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS people_chats (person_a TEXT NOT NULL,person_b TEXT NOT NULL,room_id TEXT NOT NULL UNIQUE,created_at INTEGER NOT NULL,PRIMARY KEY(person_a,person_b),FOREIGN KEY(person_a) REFERENCES people(id) ON DELETE CASCADE,FOREIGN KEY(person_b) REFERENCES people(id) ON DELETE CASCADE,FOREIGN KEY(room_id) REFERENCES rooms(id) ON DELETE CASCADE);
+CREATE INDEX IF NOT EXISTS idx_people_username ON people(username);CREATE INDEX IF NOT EXISTS idx_friend_requests_receiver ON friend_requests(receiver_id,status);
 
 CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id, id);
 `);
@@ -118,6 +136,8 @@ const roomColumns = db.prepare('PRAGMA table_info(rooms)').all().map(c => c.name
 if (!roomColumns.includes('invite_status')) db.exec(`ALTER TABLE rooms ADD COLUMN invite_status TEXT NOT NULL DEFAULT 'pending'`);
 if (!roomColumns.includes('join_code_hash')) db.exec(`ALTER TABLE rooms ADD COLUMN join_code_hash TEXT`);
 if (!roomColumns.includes('join_code')) db.exec(`ALTER TABLE rooms ADD COLUMN join_code TEXT`);
+if (!roomColumns.includes('quick_code_hash')) db.exec(`ALTER TABLE rooms ADD COLUMN quick_code_hash TEXT`);
+if (!roomColumns.includes('quick_code')) db.exec(`ALTER TABLE rooms ADD COLUMN quick_code TEXT`);
 if (!roomColumns.includes('invite_status_at')) db.exec(`ALTER TABLE rooms ADD COLUMN invite_status_at INTEGER`);
 if (!roomColumns.includes('contact_removed_by')) db.exec(`ALTER TABLE rooms ADD COLUMN contact_removed_by TEXT`);
 if (!roomColumns.includes('contact_removed_at')) db.exec(`ALTER TABLE rooms ADD COLUMN contact_removed_at INTEGER`);
@@ -166,6 +186,9 @@ function makeJoinCode(){
   return `${raw.slice(0,4)}-${raw.slice(4)}`;
 }
 const normalizeJoinCode = value => String(value||'').toUpperCase().replace(/[^A-Z2-9]/g,'');
+function makeQuickCode(){return String(crypto.randomInt(0,10000)).padStart(4,'0');}
+const normalizeQuickCode=value=>String(value||'').replace(/\D/g,'').slice(0,4);
+function availableQuickCode(){for(let i=0;i<80;i++){const code=makeQuickCode();if(!db.prepare('SELECT 1 FROM rooms WHERE quick_code_hash = ?').get(sha256(code)))return code;}return null;}
 const DEVICE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 function makeDeviceTransferCode(){
   let raw='';
@@ -201,6 +224,10 @@ function authenticate(roomId, authToken) {
 function authRequest(req) {
   return authenticate(req.params.roomId, req.header('x-chat-token'));
 }
+function peopleAuth(req){const raw=req.header('x-people-token');if(!raw)return null;return db.prepare('SELECT id,username,display_name AS displayName FROM people WHERE owner_token_hash=?').get(sha256(raw))||null;}
+function friendshipPair(a,b){return a<b?[a,b]:[b,a];}
+function areFriends(a,b){const [x,y]=friendshipPair(a,b);return Boolean(db.prepare('SELECT 1 FROM friendships WHERE person_a=? AND person_b=?').get(x,y));}
+function publicPerson(id){return db.prepare('SELECT id,username,display_name AS displayName FROM people WHERE id=?').get(id)||null;}
 
 function contactStatePayload(room, role) {
   const removedBy = room?.contact_removed_by || null;
@@ -340,6 +367,14 @@ app.use((req, res, next) => {
   next();
 });
 
+
+app.post('/api/people/register',(req,res)=>{const displayName=cleanName(req.body?.displayName),username=cleanUsername(req.body?.username).toLowerCase();if(!displayName||username.length<3)return res.status(400).json({error:'Use a name and a username with at least 3 characters.'});const existing=peopleAuth(req);if(existing){if(db.prepare('SELECT id FROM people WHERE username=? COLLATE NOCASE AND id!=?').get(username,existing.id))return res.status(409).json({error:'That username is already taken.'});db.prepare('UPDATE people SET username=?,display_name=?,updated_at=? WHERE id=?').run(username,displayName,Date.now(),existing.id);return res.json({profile:publicPerson(existing.id)});}if(db.prepare('SELECT 1 FROM people WHERE username=? COLLATE NOCASE').get(username))return res.status(409).json({error:'That username is already taken.'});const peopleToken=token(32),id=token(12),now=Date.now();db.prepare('INSERT INTO people(id,username,display_name,owner_token_hash,created_at,updated_at) VALUES(?,?,?,?,?,?)').run(id,username,displayName,sha256(peopleToken),now,now);res.json({peopleToken,profile:publicPerson(id)});});
+app.get('/api/people/me',(req,res)=>{const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Set up your Bloop username first.'});const friends=db.prepare(`SELECT p.id,p.username,p.display_name AS displayName FROM friendships f JOIN people p ON p.id=CASE WHEN f.person_a=? THEN f.person_b ELSE f.person_a END WHERE f.person_a=? OR f.person_b=? ORDER BY p.display_name COLLATE NOCASE`).all(me.id,me.id,me.id);const incoming=db.prepare(`SELECT fr.id,p.id AS personId,p.username,p.display_name AS displayName FROM friend_requests fr JOIN people p ON p.id=fr.sender_id WHERE fr.receiver_id=? AND fr.status='pending' ORDER BY fr.created_at DESC`).all(me.id);const outgoing=db.prepare(`SELECT fr.id,p.id AS personId,p.username,p.display_name AS displayName FROM friend_requests fr JOIN people p ON p.id=fr.receiver_id WHERE fr.sender_id=? AND fr.status='pending' ORDER BY fr.created_at DESC`).all(me.id);res.json({profile:publicPerson(me.id),friends,incoming,outgoing});});
+app.get('/api/people/search',(req,res)=>{const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Set up your Bloop username first.'});const q=cleanUsername(req.query.q||'').toLowerCase();if(q.length<2)return res.json({results:[]});const rows=db.prepare(`SELECT id,username,display_name AS displayName FROM people WHERE id!=? AND (username LIKE ? OR display_name LIKE ?) ORDER BY CASE WHEN username=? THEN 0 ELSE 1 END,username LIMIT 20`).all(me.id,`%${q}%`,`%${String(req.query.q||'').trim()}%`,q);res.json({results:rows.map(p=>({...p,state:areFriends(me.id,p.id)?'friends':db.prepare("SELECT 1 FROM friend_requests WHERE sender_id=? AND receiver_id=? AND status='pending'").get(me.id,p.id)?'outgoing':db.prepare("SELECT 1 FROM friend_requests WHERE sender_id=? AND receiver_id=? AND status='pending'").get(p.id,me.id)?'incoming':'none'}))});});
+app.post('/api/people/:personId/request',(req,res)=>{const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Not signed into People.'});const other=publicPerson(req.params.personId);if(!other)return res.status(404).json({error:'Person not found.'});if(other.id===me.id)return res.status(400).json({error:'That is you.'});if(areFriends(me.id,other.id))return res.json({state:'friends'});const reverse=db.prepare("SELECT id FROM friend_requests WHERE sender_id=? AND receiver_id=? AND status='pending'").get(other.id,me.id);if(reverse){db.prepare("UPDATE friend_requests SET status='accepted',responded_at=? WHERE id=?").run(Date.now(),reverse.id);const [a,b]=friendshipPair(me.id,other.id);db.prepare('INSERT OR IGNORE INTO friendships(person_a,person_b,created_at) VALUES(?,?,?)').run(a,b,Date.now());return res.json({state:'friends'});}db.prepare(`INSERT INTO friend_requests(sender_id,receiver_id,status,created_at) VALUES(?,?,'pending',?) ON CONFLICT(sender_id,receiver_id) DO UPDATE SET status='pending',created_at=excluded.created_at,responded_at=NULL`).run(me.id,other.id,Date.now());res.json({state:'outgoing'});});
+app.post('/api/people/requests/:requestId/respond',(req,res)=>{const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Not signed into People.'});const fr=db.prepare("SELECT * FROM friend_requests WHERE id=? AND receiver_id=? AND status='pending'").get(req.params.requestId,me.id);if(!fr)return res.status(404).json({error:'Request not found.'});const action=req.body?.action==='accept'?'accepted':'declined';db.prepare('UPDATE friend_requests SET status=?,responded_at=? WHERE id=?').run(action,Date.now(),fr.id);if(action==='accepted'){const [a,b]=friendshipPair(fr.sender_id,fr.receiver_id);db.prepare('INSERT OR IGNORE INTO friendships(person_a,person_b,created_at) VALUES(?,?,?)').run(a,b,Date.now());}res.json({ok:true,state:action});});
+app.post('/api/people/:personId/message',(req,res)=>{const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Not signed into People.'});const other=publicPerson(req.params.personId);if(!other)return res.status(404).json({error:'Person not found.'});if(!areFriends(me.id,other.id))return res.status(403).json({error:'Accept the friend request first.'});const [a,b]=friendshipPair(me.id,other.id);let link=db.prepare('SELECT room_id AS roomId FROM people_chats WHERE person_a=? AND person_b=?').get(a,b),roomId=link?.roomId;if(!roomId){roomId=token(12);const now=Date.now(),joinCode=makeJoinCode(),quickCode=availableQuickCode();db.prepare(`INSERT INTO rooms(id,share_token_hash,join_code_hash,join_code,quick_code_hash,quick_code,creator_token_hash,guest_token_hash,invite_status,invite_status_at,created_at) VALUES(?,?,?,?,?,?,?,?, 'accepted', ?,?)`).run(roomId,sha256(token(24)),sha256(normalizeJoinCode(joinCode)),joinCode,quickCode?sha256(quickCode):null,quickCode,sha256(token(32)),sha256(token(32)),now,now);const creator=publicPerson(a),guest=publicPerson(b);db.prepare(`INSERT INTO profiles(room_id,role,display_name,username) VALUES(?,'creator',?,?),(?,'guest',?,?)`).run(roomId,creator.displayName,creator.username,roomId,guest.displayName,guest.username);db.prepare('INSERT INTO people_chats(person_a,person_b,room_id,created_at) VALUES(?,?,?,?)').run(a,b,roomId,now);}const role=me.id===a?'creator':'guest',authToken=issueAdditionalAccessToken(roomId,role);res.json({roomId,role,authToken});});
+
 app.post('/api/rooms', (_req, res) => {
   const roomId = token(12);
   const shareToken = token(24);
@@ -350,24 +385,32 @@ app.post('/api/rooms', (_req, res) => {
     if(!db.prepare('SELECT 1 FROM rooms WHERE join_code_hash = ?').get(sha256(normalizeJoinCode(candidate)))){joinCode=candidate;break;}
   }
   if(!joinCode) return res.status(503).json({error:'Could not create a join code. Try again.'});
-  db.prepare('INSERT INTO rooms (id, share_token_hash, join_code_hash, join_code, creator_token_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(roomId, sha256(shareToken), sha256(normalizeJoinCode(joinCode)), joinCode, sha256(creatorToken), Date.now());
+  const quickCode=availableQuickCode();
+  if(!quickCode) return res.status(503).json({error:'Could not create a 4-digit code. Try again.'});
+  db.prepare('INSERT INTO rooms (id, share_token_hash, join_code_hash, join_code, quick_code_hash, quick_code, creator_token_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(roomId, sha256(shareToken), sha256(normalizeJoinCode(joinCode)), joinCode, sha256(quickCode), quickCode, sha256(creatorToken), Date.now());
   db.prepare(`INSERT OR IGNORE INTO profiles (room_id, role, display_name) VALUES (?, 'creator', 'You')`).run(roomId);
-  res.json({ roomId, shareToken, creatorToken, joinCode });
+  res.json({ roomId, shareToken, creatorToken, joinCode, quickCode });
 });
 
-app.post('/api/join-code', (req, res) => {
-  const normalized=normalizeJoinCode(req.body?.code);
-  if(normalized.length!==8) return res.status(400).json({error:'Enter an 8-character Bloop code.'});
-  const room=db.prepare('SELECT * FROM rooms WHERE join_code_hash = ?').get(sha256(normalized));
-  if(!room) return res.status(404).json({error:'That Bloop code was not found.'});
-  if(room.invite_status==='declined') return res.status(410).json({error:'This invite was declined.'});
-  if(room.guest_token_hash) return res.status(403).json({error:'This chat already has its two people.'});
-  const guestToken=token(32);
-  const result=db.prepare(`UPDATE rooms SET guest_token_hash = ?, invite_status = 'accepted', invite_status_at = ? WHERE id = ? AND guest_token_hash IS NULL AND invite_status != 'declined'`).run(sha256(guestToken),Date.now(),room.id);
-  if(!result.changes) return res.status(403).json({error:'This chat already has its two people.'});
-  db.prepare(`INSERT OR IGNORE INTO profiles (room_id, role, display_name) VALUES (?, 'guest', 'Friend')`).run(room.id);
+app.post('/api/join-code', (req,res)=>{
+  const raw=String(req.body?.code||'').trim(),quick=normalizeQuickCode(raw),normalized=normalizeJoinCode(raw);let room=null;
+  if(/^\d{4}$/.test(raw.replace(/\s/g,''))) room=db.prepare('SELECT * FROM rooms WHERE quick_code_hash=?').get(sha256(quick));
+  else if(normalized.length===8) room=db.prepare('SELECT * FROM rooms WHERE join_code_hash=?').get(sha256(normalized));
+  else return res.status(400).json({error:'Enter a 4-digit Bloop code.'});
+  if(!room)return res.status(404).json({error:'That Bloop code was not found.'});
+  if(room.invite_status==='declined')return res.status(410).json({error:'This invite was declined.'});
+  if(room.guest_token_hash)return res.status(403).json({error:'This chat already has its two people.'});
+  const guestToken=token(32);const result=db.prepare(`UPDATE rooms SET guest_token_hash=?,invite_status='accepted',invite_status_at=? WHERE id=? AND guest_token_hash IS NULL AND invite_status!='declined'`).run(sha256(guestToken),Date.now(),room.id);
+  if(!result.changes)return res.status(403).json({error:'This chat already has its two people.'});
+  db.prepare(`INSERT OR IGNORE INTO profiles(room_id,role,display_name) VALUES(?,'guest','Friend')`).run(room.id);
   res.json({roomId:room.id,role:'guest',authToken:guestToken});
+});
+app.post('/api/rooms/:roomId/quick-code',(req,res)=>{
+  const auth=authRequest(req);if(!auth)return res.status(401).json({error:'Not authorized.'});if(auth.role!=='creator')return res.status(403).json({error:'Only the person who made the chat can change its quick code.'});
+  const code=normalizeQuickCode(req.body?.code);if(!/^\d{4}$/.test(code))return res.status(400).json({error:'Use exactly 4 digits.'});
+  if(db.prepare('SELECT id FROM rooms WHERE quick_code_hash=? AND id!=?').get(sha256(code),req.params.roomId))return res.status(409).json({error:'That 4-digit code is already being used. Pick another.'});
+  db.prepare('UPDATE rooms SET quick_code_hash=?,quick_code=? WHERE id=?').run(sha256(code),code,req.params.roomId);res.json({quickCode:code});
 });
 
 app.post('/api/rooms/:roomId/join', (req, res) => {
@@ -380,12 +423,6 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
     if (auth) return res.json({ role: auth.role, authToken: existingToken });
   }
   if (room.invite_status === 'declined') return res.status(410).json({ error: 'This invite was declined.' });
-  // The accepted guest may reopen the original invite on another device.
-  // Return the invite token itself; authenticate() accepts it only for the guest
-  // after this room has already been accepted. The phone remains signed in too.
-  if (room.guest_token_hash && room.invite_status === 'accepted') {
-    return res.json({ role: 'guest', authToken: shareToken, resumed: true });
-  }
   if (room.guest_token_hash) return res.status(403).json({ error: 'This chat already has its two people.' });
   const guestToken = token(32);
   const result = db.prepare(`UPDATE rooms SET guest_token_hash = ?, invite_status = 'accepted', invite_status_at = ? WHERE id = ? AND guest_token_hash IS NULL AND invite_status != 'declined'`).run(sha256(guestToken), Date.now(), roomId);
@@ -394,6 +431,34 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
   res.json({ role: 'guest', authToken: guestToken });
 });
 
+
+
+app.post('/api/rooms/:roomId/device-pin', (req, res) => {
+  if (appLocked()) return res.status(423).json({ error: 'Bloop is locked.' });
+  const auth = authRequest(req);
+  if (!auth) return res.status(401).json({ error: 'Not allowed.' });
+  const pin = String(req.body?.pin || '').trim();
+  if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'Use a 4-digit PIN.' });
+  db.prepare(`INSERT INTO room_device_pins(room_id, role, pin_hash, updated_at)
+              VALUES (?, ?, ?, ?)
+              ON CONFLICT(room_id, role) DO UPDATE SET pin_hash = excluded.pin_hash, updated_at = excluded.updated_at`)
+    .run(req.params.roomId, auth.role, sha256(pin), Date.now());
+  res.json({ ok: true });
+});
+
+app.post('/api/continue-chat', (req, res) => {
+  if (appLocked()) return res.status(423).json({ error: 'Bloop is locked.' });
+  const rawCode=String(req.body?.code||'').trim(),normalized=normalizeJoinCode(rawCode),quick=normalizeQuickCode(rawCode);
+  const pin=String(req.body?.pin||'').trim();if(!/^\d{4}$/.test(pin))return res.status(400).json({error:'Enter your 4-digit device PIN.'});
+  let room=null;if(/^\d{4}$/.test(rawCode.replace(/\s/g,'')))room=db.prepare('SELECT * FROM rooms WHERE quick_code_hash=?').get(sha256(quick));else if(normalized.length===8)room=db.prepare('SELECT * FROM rooms WHERE join_code_hash=?').get(sha256(normalized));else return res.status(400).json({error:'Enter the 4-digit chat code.'});
+  if (!room || room.invite_status !== 'accepted' || !room.guest_token_hash)
+    return res.status(404).json({ error: 'That existing chat was not found.' });
+  const access = db.prepare(`SELECT role FROM room_device_pins WHERE room_id = ? AND pin_hash = ? ORDER BY CASE role WHEN 'guest' THEN 0 ELSE 1 END LIMIT 1`)
+    .get(room.id, sha256(pin));
+  if (!access) return res.status(403).json({ error: 'That PIN does not match this chat.' });
+  const authToken = issueAdditionalAccessToken(room.id, access.role);
+  res.json({ roomId: room.id, role: access.role, authToken });
+});
 
 app.post('/api/rooms/:roomId/device-transfer-code', (req, res) => {
   if (appLocked()) return res.status(423).json({ error: 'Bloop is locked.' });
@@ -459,7 +524,7 @@ app.get('/api/rooms/:roomId/messages', (req, res) => {
   if (!auth) return res.status(401).json({ error: 'Not authorized.' });
   const unreadCount = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE room_id = ? AND sender != ? AND seen_at IS NULL AND deleted_at IS NULL').get(req.params.roomId, auth.role).n;
   const liveRoom = db.prepare('SELECT * FROM rooms WHERE id = ?').get(req.params.roomId);
-  const joinCode = liveRoom?.join_code || ensureRoomJoinCode(req.params.roomId);
+  const joinCode = liveRoom?.quick_code || liveRoom?.join_code || ensureRoomJoinCode(req.params.roomId);
   res.json({ role: auth.role, messages: serializeMessages(req.params.roomId), profiles: getProfiles(req.params.roomId), presence: presencePayload(req.params.roomId), unreadCount, inviteStatus: auth.room.invite_status || 'pending', inviteStatusAt: auth.room.invite_status_at || null, joinCode, contactState: contactStatePayload(liveRoom, auth.role) });
 });
 

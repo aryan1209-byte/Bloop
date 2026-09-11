@@ -39,3 +39,17 @@ Removing a contact now changes the chat state for both people instead of only de
 - Disabled the automatic per-chat theme/customization popup. Theme changes are manual from Customize.
 - Added explicit background/foreground presence events so last-seen updates when the app is hidden and online returns when it is visible.
 - Version badge moved above the phone composer while a chat is open.
+
+## v33 Quick code + cross-device return
+- For a brand-new chat, the fastest option is the existing 8-character Bloop code. Send only that short code; the other person opens the normal Bloop homepage on any device and uses Quick Join. No long invite URL is required.
+- For a chat that was already accepted on another device, each participant can set a 4-digit Device PIN in Profile & Appearance.
+- On another device, use Continue an existing chat with the same 8-character chat code + that 4-digit PIN.
+- Continuing creates a separate access token, so both devices can remain signed in.
+- The original invite URL is not reused as a cross-device login after the chat has already been accepted.
+test
+
+## v34 Quick codes + People
+- New chats get a 4-digit quick code, and the creator can change it to any available 4-digit code.
+- Home now has Chats and People tabs.
+- People supports username search, friend requests, accepting/declining, and messaging accepted friends.
+- Messaging a friend creates or reopens a normal Bloop chat.

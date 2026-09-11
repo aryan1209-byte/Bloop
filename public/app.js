@@ -106,6 +106,7 @@ const roleKey=id=>`justtwo:${id}:role`;
 const lastRoomKey='justtwo:lastRoom';
 const roomsKey='justtwo:rooms:v1';
 const identityKey='justtwo:identity:v1';
+const peopleTokenKey='bloop:peopleToken:v1';
 const setupKey=(id,role)=>`justtwo:${id}:${role}:setup-v3`;
 function getRooms(){try{return [...new Set(JSON.parse(localStorage.getItem(roomsKey)||'[]'))];}catch{return[];}}
 function rememberRoom(id){const rooms=getRooms().filter(Boolean);if(!rooms.includes(id))rooms.unshift(id);localStorage.setItem(roomsKey,JSON.stringify(rooms.slice(0,30)));localStorage.setItem(lastRoomKey,id);}
@@ -555,16 +556,17 @@ $('createBtn').onclick=async()=>{
   const r=await fetch('/api/rooms',{method:'POST'}); const data=await r.json(); if(!r.ok)return fail(data.error||'Could not create chat.');
   currentRoom=data.roomId;authToken=data.creatorToken;myRole='creator';
   localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);
-  $('shareLink').value=`${location.origin}/?room=${encodeURIComponent(currentRoom)}&invite=${encodeURIComponent(data.shareToken)}`; if($('shareCode'))$('shareCode').value=data.joinCode||''; show('share'); history.pushState({view:'share'},'','/');
+  $('shareLink').value=`${location.origin}/?room=${encodeURIComponent(currentRoom)}&invite=${encodeURIComponent(data.shareToken)}`; if($('shareCode'))$('shareCode').value=data.quickCode||data.joinCode||''; show('share'); history.pushState({view:'share'},'','/');
 };
 $('copyBtn').onclick=async()=>{await navigator.clipboard.writeText($('shareLink').value);$('copyBtn').textContent='Copied ✓';setTimeout(()=>$('copyBtn').textContent='Copy',1200);};
 $('chatCodeCopy')?.addEventListener('click',async()=>{const code=$('chatCodeValue')?.textContent?.trim();if(!code||code==='—')return;try{await navigator.clipboard.writeText(code);$('chatCodeCopy').textContent='Copied ✓';setTimeout(()=>$('chatCodeCopy').textContent='Copy',1100);}catch{}});
 $('copyCodeBtn')?.addEventListener('click',async()=>{const code=$('shareCode')?.value||'';if(!code)return;await navigator.clipboard.writeText(code);$('copyCodeBtn').textContent='Copied ✓';setTimeout(()=>$('copyCodeBtn').textContent='Copy code',1200);});
-function formatJoinCode(value){const raw=String(value||'').toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,8);return raw.length>4?`${raw.slice(0,4)}-${raw.slice(4)}`:raw;}
+$('customQuickCode')?.addEventListener('input',e=>{e.target.value=String(e.target.value||'').replace(/\D/g,'').slice(0,4);});$('setQuickCodeBtn')?.addEventListener('click',async()=>{const code=String($('customQuickCode')?.value||'').replace(/\D/g,'').slice(0,4),status=$('quickCodeStatus');if(code.length!==4){status.textContent='Choose exactly 4 digits.';return;}const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/quick-code`,{method:'POST',headers:{'content-type':'application/json','x-chat-token':authToken},body:JSON.stringify({code})});const d=await r.json().catch(()=>({}));if(!r.ok){status.textContent=d.error||'Could not set that code.';return;}$('shareCode').value=d.quickCode;$('customQuickCode').value='';status.textContent='Your code is now '+d.quickCode+' ✓';});
+function formatJoinCode(value){const original=String(value||'').trim(),digits=original.replace(/\D/g,'');if(/^\d*$/.test(original.replace(/[ -]/g,''))&&digits.length<=4)return digits.slice(0,4);const raw=original.toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,8);return raw.length>4?`${raw.slice(0,4)}-${raw.slice(4)}`:raw;}
 $('joinCodeInput')?.addEventListener('input',e=>{e.target.value=formatJoinCode(e.target.value);$('joinCodeStatus').textContent='';});
 async function joinByCode(){
   const input=$('joinCodeInput');const status=$('joinCodeStatus');const code=formatJoinCode(input?.value);
-  if(code.replace('-','').length!==8){if(status)status.textContent='Enter the full 8-character code.';return;}
+  const compact=code.replace('-','');if(!(/^\d{4}$/.test(compact)||compact.length===8)){if(status)status.textContent='Enter the 4-digit Bloop code.';return;}
   if(status)status.textContent='Joining…';
   try{
     const r=await fetch('/api/join-code',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code})});const data=await r.json();
@@ -576,83 +578,28 @@ async function joinByCode(){
 }
 $('joinCodeBtn')?.addEventListener('click',joinByCode);$('joinCodeInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();joinByCode();}});
 
-function formatDeviceTransferCode(value){
-  const raw=String(value||'').toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,10);
-  return raw.length>5?`${raw.slice(0,5)}-${raw.slice(5)}`:raw;
-}
-$('deviceTransferInput')?.addEventListener('input',e=>{
-  e.target.value=formatDeviceTransferCode(e.target.value);
-  if($('deviceTransferStatus'))$('deviceTransferStatus').textContent='';
-});
-async function redeemDeviceTransferCode(){
-  const input=$('deviceTransferInput'),status=$('deviceTransferStatus');
-  const code=formatDeviceTransferCode(input?.value);
-  if(code.replace('-','').length!==10){if(status)status.textContent='Enter the full 10-character device code.';return;}
-  if(status)status.textContent='Connecting this device…';
+$('continueChatCode')?.addEventListener('input',e=>{e.target.value=formatJoinCode(e.target.value);if($('continueChatStatus'))$('continueChatStatus').textContent='';});
+$('continueChatPin')?.addEventListener('input',e=>{e.target.value=String(e.target.value||'').replace(/\D/g,'').slice(0,4);if($('continueChatStatus'))$('continueChatStatus').textContent='';});
+async function continueExistingChat(){
+  const code=formatJoinCode($('continueChatCode')?.value||'');
+  const pin=String($('continueChatPin')?.value||'').replace(/\D/g,'').slice(0,4);
+  const status=$('continueChatStatus');
+  const compact=code.replace('-','');if(!(/^\d{4}$/.test(compact)||compact.length===8)){if(status)status.textContent='Enter the 4-digit chat code.';return;}
+  if(pin.length!==4){if(status)status.textContent='Enter your 4-digit device PIN.';return;}
+  if(status)status.textContent='Opening chat…';
   try{
-    const r=await fetch('/api/device-transfer/redeem',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code})});
+    const r=await fetch('/api/continue-chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code,pin})});
     const data=await r.json();
     if(!r.ok){if(status)status.textContent=data.error||'Could not continue that chat.';return;}
     currentRoom=data.roomId;authToken=data.authToken;myRole=data.role;
-    localStorage.setItem(storageKey(currentRoom),authToken);
-    localStorage.setItem(roleKey(currentRoom),myRole);
-    rememberRoom(currentRoom);
+    localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);rememberRoom(currentRoom);
     if(status)status.textContent='Connected ✓';
     await openChat(true);
-  }catch{
-    if(status)status.textContent='Could not connect. Try again.';
-  }
+  }catch{if(status)status.textContent='Could not connect. Try again.';}
 }
-$('deviceTransferBtn')?.addEventListener('click',redeemDeviceTransferCode);
-$('deviceTransferInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();redeemDeviceTransferCode();}});
+$('continueChatBtn')?.addEventListener('click',continueExistingChat);
+$('continueChatPin')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();continueExistingChat();}});
 
-let deviceTransferExpiryTimer=null;
-function renderDeviceTransferExpiry(expiresAt){
-  clearInterval(deviceTransferExpiryTimer);
-  const el=$('deviceTransferExpiry');
-  const tick=()=>{
-    const ms=Number(expiresAt)-Date.now();
-    if(!el)return;
-    if(ms<=0){el.textContent='This code has expired. Tap New code.';clearInterval(deviceTransferExpiryTimer);return;}
-    const mins=Math.floor(ms/60000),secs=Math.floor((ms%60000)/1000);
-    el.textContent=`Expires in ${mins}:${String(secs).padStart(2,'0')}`;
-  };
-  tick();deviceTransferExpiryTimer=setInterval(tick,1000);
-}
-async function createDeviceTransferCode(){
-  if(!currentRoom||!authToken)return;
-  const codeEl=$('deviceTransferCode'),expiry=$('deviceTransferExpiry');
-  if(codeEl)codeEl.textContent='Creating…';
-  if(expiry)expiry.textContent='';
-  try{
-    const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/device-transfer-code`,{
-      method:'POST',headers:{'x-chat-token':authToken}
-    });
-    const data=await r.json();
-    if(!r.ok){if(codeEl)codeEl.textContent='Could not create code';return;}
-    if(codeEl)codeEl.textContent=data.code;
-    renderDeviceTransferExpiry(data.expiresAt);
-  }catch{
-    if(codeEl)codeEl.textContent='Could not connect';
-  }
-}
-$('linkDeviceBtn')?.addEventListener('click',async()=>{
-  const dlg=$('deviceTransferDialog');
-  if(!dlg)return;
-  dlg.showModal();
-  await createDeviceTransferCode();
-});
-$('newDeviceTransferCode')?.addEventListener('click',createDeviceTransferCode);
-$('copyDeviceTransferCode')?.addEventListener('click',async()=>{
-  const code=$('deviceTransferCode')?.textContent?.trim();
-  if(!code||code==='—'||code.includes('Creating')||code.includes('Could not'))return;
-  try{
-    await navigator.clipboard.writeText(code);
-    const btn=$('copyDeviceTransferCode');
-    btn.textContent='Copied ✓';
-    setTimeout(()=>btn.textContent='Copy code',1000);
-  }catch{}
-});
 
 $('enterBtn').onclick=()=>{
   rememberRoom(currentRoom);
@@ -894,12 +841,14 @@ $('profileBtn').onclick=()=>{
   const identity=getIdentity()||{};const mine=profiles[myRole]||{};
   if($('profileDisplayName'))$('profileDisplayName').value=identity.name||mine.displayName||'';
   if($('profileUsername'))$('profileUsername').value=identity.username||mine.username||'';
+  if($('profileDevicePin'))$('profileDevicePin').value='';
   if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='';
   $('profileDialog').showModal();
 };
 $('avatarPick').onclick=()=>$('avatarInput').click();$('avatarInput').onchange=()=>uploadAvatarFrom('avatarInput');
 async function saveIdentityAcrossChats(name,username){
   localStorage.setItem(identityKey,JSON.stringify({name,username}));
+  if(localStorage.getItem(peopleTokenKey)){try{await fetch('/api/people/register',{method:'POST',headers:{'content-type':'application/json',...peopleHeaders()},body:JSON.stringify({displayName:name,username})});}catch{}}
   const rooms=getRooms();
   await Promise.allSettled(rooms.map(async id=>{
     const token=localStorage.getItem(storageKey(id));if(!token)return;
@@ -910,10 +859,20 @@ async function saveIdentityAcrossChats(name,username){
 $('saveProfile').onclick=async()=>{
   const name=$('profileDisplayName')?.value.trim().slice(0,24)||'';
   const username=$('profileUsername')?.value.trim().replace(/^@+/,'').replace(/[^a-zA-Z0-9_.]/g,'').slice(0,20)||'';
+  const devicePin=String($('profileDevicePin')?.value||'').replace(/\D/g,'').slice(0,4);
   if(!name||!username){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='Add both a name and username.';return;}
   const btn=$('saveProfile');btn.disabled=true;btn.textContent='Saving…';
-  try{await saveIdentityAcrossChats(name,username);if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='Saved ✓';setTimeout(()=>$('profileDialog').close(),180);}
-  finally{btn.disabled=false;btn.textContent='Save';}
+  try{
+    await saveIdentityAcrossChats(name,username);
+    if(devicePin){
+      if(devicePin.length!==4){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='Device PIN must be 4 digits.';return;}
+      const pr=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/device-pin`,{method:'POST',headers:{'content-type':'application/json','x-chat-token':authToken},body:JSON.stringify({pin:devicePin})});
+      const pd=await pr.json().catch(()=>({}));
+      if(!pr.ok){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent=pd.error||'Could not save device PIN.';return;}
+    }
+    if($('profileIdentityStatus'))$('profileIdentityStatus').textContent=devicePin?'Profile + device PIN saved ✓':'Saved ✓';
+    setTimeout(()=>$('profileDialog').close(),280);
+  } finally{btn.disabled=false;btn.textContent='Save';}
 };
 async function syncIdentityToRoom(){
   const identity=getIdentity();if(!identity||!currentRoom||!authToken)return true;
@@ -929,6 +888,17 @@ $('saveIdentity').onclick=async()=>{
   if(!name||!username){$('identityError').textContent='Add both a name and username.';return;}
   localStorage.setItem(identityKey,JSON.stringify({name,username}));$('identityDialog').close();if(currentRoom&&authToken){await syncIdentityToRoom();refreshHeader();}
 };
+
+function peopleHeaders(){const t=localStorage.getItem(peopleTokenKey);return t?{'x-people-token':t}:{};}
+async function ensurePeopleAccount(){const identity=getIdentity(),status=$('peopleStatus');if(!identity?.name||!identity?.username){if(status)status.textContent='Set your Name + Username in Profile first.';return false;}const r=await fetch('/api/people/register',{method:'POST',headers:{'content-type':'application/json',...peopleHeaders()},body:JSON.stringify({displayName:identity.name,username:identity.username})}),d=await r.json().catch(()=>({}));if(!r.ok){if(status)status.textContent=d.error||'Could not set up People.';return false;}if(d.peopleToken)localStorage.setItem(peopleTokenKey,d.peopleToken);return true;}
+function personRow(p,a=''){const initial=escapeHtml((p.displayName||p.username||'?').charAt(0).toUpperCase());return `<div class="personRow"><div class="personAvatar">${initial}</div><div class="personInfo"><strong>${escapeHtml(p.displayName||p.username)}</strong><span>@${escapeHtml(p.username)}</span></div><div class="personActions">${a}</div></div>`;}
+async function loadPeopleDashboard(){if(!(await ensurePeopleAccount()))return;const r=await fetch('/api/people/me',{headers:peopleHeaders(),cache:'no-store'}),d=await r.json().catch(()=>({}));if(!r.ok)return;$('friendRequestCount').textContent=d.incoming?.length?`${d.incoming.length} waiting`:'';$('friendsCount').textContent=d.friends?.length?String(d.friends.length):'';$('friendRequestsList').innerHTML=d.incoming?.length?d.incoming.map(p=>personRow(p,`<button class="secondary" data-accept-request="${p.id}">Accept</button><button class="tinyBtn" data-decline-request="${p.id}">Decline</button>`)).join(''):'<div class="peopleEmpty">No friend requests.</div>';$('friendsList').innerHTML=d.friends?.length?d.friends.map(p=>personRow(p,`<button class="primary smallPeopleBtn" data-message-person="${p.id}">Message</button>`)).join(''):'<div class="peopleEmpty">No friends yet.</div>';}
+async function searchPeople(){if(!(await ensurePeopleAccount()))return;const q=String($('peopleSearchInput')?.value||'').trim().replace(/^@/,''),status=$('peopleStatus');if(q.length<2){status.textContent='Type at least 2 characters.';return;}status.textContent='Searching…';const r=await fetch(`/api/people/search?q=${encodeURIComponent(q)}`,{headers:peopleHeaders(),cache:'no-store'}),d=await r.json().catch(()=>({}));if(!r.ok){status.textContent=d.error||'Search failed.';return;}status.textContent='';$('peopleSearchResults').innerHTML=d.results?.length?d.results.map(p=>personRow(p,p.state==='friends'?`<button class="primary smallPeopleBtn" data-message-person="${p.id}">Message</button>`:p.state==='outgoing'?'<span class="requestState">Requested</span>':p.state==='incoming'?'<span class="requestState">Request waiting</span>':`<button class="secondary" data-add-person="${p.id}">Add friend</button>`)).join(''):'<div class="peopleEmpty">No usernames found.</div>';}
+async function sendFriendRequest(id){const r=await fetch(`/api/people/${encodeURIComponent(id)}/request`,{method:'POST',headers:peopleHeaders()}),d=await r.json().catch(()=>({}));if(!r.ok)return alert(d.error||'Could not send request.');await searchPeople();await loadPeopleDashboard();}
+async function respondFriendRequest(id,action){const r=await fetch(`/api/people/requests/${id}/respond`,{method:'POST',headers:{'content-type':'application/json',...peopleHeaders()},body:JSON.stringify({action})}),d=await r.json().catch(()=>({}));if(!r.ok)return alert(d.error||'Could not update request.');await loadPeopleDashboard();}
+async function messagePerson(id){const r=await fetch(`/api/people/${encodeURIComponent(id)}/message`,{method:'POST',headers:peopleHeaders()}),d=await r.json().catch(()=>({}));if(!r.ok)return alert(d.error||'Could not open chat.');currentRoom=d.roomId;authToken=d.authToken;myRole=d.role;localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);rememberRoom(currentRoom);await openChat(true);}
+function setHomeTab(tab){const people=tab==='people';$('landing').classList.toggle('peopleMode',people);$('peoplePanel').classList.toggle('hidden',!people);$('homeChatsTab').classList.toggle('active',!people);$('homePeopleTab').classList.toggle('active',people);if(people)loadPeopleDashboard();}
+$('homeChatsTab')?.addEventListener('click',()=>setHomeTab('chats'));$('homePeopleTab')?.addEventListener('click',()=>setHomeTab('people'));$('peopleSearchBtn')?.addEventListener('click',searchPeople);$('peopleSearchInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchPeople();}});$('peoplePanel')?.addEventListener('click',e=>{const a=e.target.closest('[data-add-person]'),b=e.target.closest('[data-accept-request]'),c=e.target.closest('[data-decline-request]'),m=e.target.closest('[data-message-person]');if(a)sendFriendRequest(a.dataset.addPerson);else if(b)respondFriendRequest(b.dataset.acceptRequest,'accept');else if(c)respondFriendRequest(c.dataset.declineRequest,'decline');else if(m)messagePerson(m.dataset.messagePerson);});
 
 function showEmergencyLock(){socket?.disconnect();setTyping(false);$('lockScreen').classList.remove('hidden');$('unlockPassword').value='';$('unlockError').textContent='';setTimeout(()=>$('unlockPassword').focus(),50);}
 function hideEmergencyLock(){$('lockScreen').classList.add('hidden');}
