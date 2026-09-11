@@ -10,14 +10,19 @@
   <link rel="apple-touch-icon" href="/assets/bloop-icon.jpg">
 </head>
 <body>
-<div class="bloopVersion">Bloop v34</div>
+<div class="bloopVersion">Bloop v35</div>
   <div class="pageWaterBg" aria-hidden="true"></div>
   <div class="bloopBrandBadge" aria-label="Bloop"><img src="/assets/bloop-icon.jpg" alt=""><span>bloop</span></div>
   <div id="appChrome" class="appChrome" aria-hidden="false">
-    <div id="clock" class="clockPill">--:--</div>
+    <img src="/assets/bloop-icon.jpg" class="chromeLogo" alt="Bloop">
+    <div class="chromeStatus">
+      <div id="dateClock" class="clockPill">--</div>
+      <div id="batteryPill" class="batteryPill hidden" aria-label="Battery"><span class="batteryIcon"><i id="batteryFill"></i></span><span id="batteryText">--%</span></div>
+    </div>
     <button id="privacyNowBtn" class="privacyNowBtn" type="button" aria-label="Blur screen now" title="Blur screen now">◉</button>
-    <button id="globalEmergencyBtn" class="globalEmergency" type="button" aria-label="Emergency lock" title="Emergency lock">!</button>
+    <button id="globalEmergencyBtn" class="globalEmergency" type="button" aria-label="Emergency exit" title="Emergency exit">!</button>
   </div>
+  <div id="quietWarning" class="quietWarning hidden" aria-live="polite"></div>
 
   <section id="onboarding" class="onboarding hidden" aria-live="polite" aria-modal="true" role="dialog">
     <div class="onboardingPanel compactManual">
@@ -44,7 +49,7 @@
   <main class="shell">
     <section id="landing" class="card landing">
       <div class="homeHero">
-        <div class="logo">✦</div>
+        <div class="logo"><img src="/assets/bloop-icon.jpg" alt="Bloop"></div>
         <div>
           <span class="eyebrow">HOME</span>
           <h1>Bloop</h1>
@@ -52,7 +57,12 @@
       </div>
       <p class="homeLead">Your private corner for messages, photos, voice notes and much more!</p>
 <div class="homeTabs"><button id="homeChatsTab" class="homeTab active" type="button">Chats</button><button id="homePeopleTab" class="homeTab" type="button">People</button></div>
-<section id="peoplePanel" class="peoplePanel hidden"><section class="homeWidget"><div class="widgetHeading"><div><span class="eyebrow">FIND PEOPLE</span><h2>Search usernames</h2></div></div><p class="muted">Search by Bloop username.</p><div class="peopleSearchRow"><input id="peopleSearchInput" autocomplete="off" placeholder="@username"><button id="peopleSearchBtn" class="secondary" type="button">Search</button></div><small id="peopleStatus" class="muted"></small><div id="peopleSearchResults" class="peopleList"></div></section><section class="homeWidget"><div class="widgetHeading"><div><span class="eyebrow">REQUESTS</span><h2>Friend requests</h2></div><small id="friendRequestCount" class="muted"></small></div><div id="friendRequestsList" class="peopleList"></div></section><section class="homeWidget"><div class="widgetHeading"><div><span class="eyebrow">FRIENDS</span><h2>Your people</h2></div><small id="friendsCount" class="muted"></small></div><div id="friendsList" class="peopleList"></div></section></section>
+<section id="peoplePanel" class="peoplePanel hidden">
+        <section class="homeWidget peopleDirectoryWidget">
+          <div class="widgetHeading"><div><span class="eyebrow">PEOPLE ON BLOOP</span><h2>Everyone</h2></div><button id="refreshPeopleBtn" class="tinyBtn" type="button">Refresh</button></div>
+          <p class="muted">All Bloop usernames currently in the directory. Search still works below.</p>
+          <div id="peopleDirectoryList" class="peopleList"></div>
+        </section><section class="homeWidget"><div class="widgetHeading"><div><span class="eyebrow">FIND PEOPLE</span><h2>Search usernames</h2></div></div><p class="muted">Search by Bloop username.</p><div class="peopleSearchRow"><input id="peopleSearchInput" autocomplete="off" placeholder="@username"><button id="peopleSearchBtn" class="secondary" type="button">Search</button></div><small id="peopleStatus" class="muted"></small><div id="peopleSearchResults" class="peopleList"></div></section><section class="homeWidget"><div class="widgetHeading"><div><span class="eyebrow">REQUESTS</span><h2>Friend requests</h2></div><small id="friendRequestCount" class="muted"></small></div><div id="friendRequestsList" class="peopleList"></div></section><section class="homeWidget"><div class="widgetHeading"><div><span class="eyebrow">FRIENDS</span><h2>Your people</h2></div><small id="friendsCount" class="muted"></small></div><div id="friendsList" class="peopleList"></div></section></section>
 
       <div id="inviteCard" class="inviteCard hidden">
         <div class="inviteIcon">↘</div>
@@ -65,19 +75,25 @@
       <section class="homeWidget joinCodeWidget">
         <div class="widgetHeading"><div><span class="eyebrow">QUICK JOIN</span><h2>Got a Bloop code?</h2></div></div>
         <p class="muted">Type the 4-digit code they sent you — no link needed.</p>
-        <div class="joinCodeRow"><input id="joinCodeInput" inputmode="text" autocomplete="off" maxlength="9" placeholder="1240" aria-label="Bloop chat code"><button id="joinCodeBtn" class="secondary" type="button">Join</button></div>
+        <div class="joinCodeRow"><input id="joinCodeInput" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="e.g. 4827" aria-label="4 digit Bloop code"><button id="joinCodeBtn" class="secondary" type="button">Join</button></div>
         <small id="joinCodeStatus" class="muted"></small>
       </section>
 
       <section class="homeWidget deviceTransferWidget">
         <div class="widgetHeading"><div><span class="eyebrow">CONTINUE</span><h2>Continue an existing chat</h2></div></div>
-        <p class="muted">Already joined on another device? Enter the short chat code and your 4-digit device PIN.</p>
+        <p class="muted">Already joined on another device? Enter the chat's 4-digit Bloop code and your 4-digit device PIN.</p>
         <div class="continueChatFields">
-          <input id="continueChatCode" inputmode="text" autocomplete="off" maxlength="9" placeholder="ABCD-2345" aria-label="Chat code">
+          <input id="continueChatCode" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="e.g. 4827" aria-label="4 digit chat code">
           <input id="continueChatPin" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="PIN" aria-label="4 digit device PIN">
           <button id="continueChatBtn" class="secondary" type="button">Continue</button>
         </div>
         <small id="continueChatStatus" class="muted"></small>
+      </section>
+      <section class="homeWidget deviceLinkRedeemWidget">
+        <div class="widgetHeading"><div><span class="eyebrow">LINK A DEVICE</span><h2>Got a device-link code?</h2></div></div>
+        <p class="muted">Use the temporary code shown inside your chat on the other device.</p>
+        <div class="joinCodeRow"><input id="deviceTransferInput" inputmode="text" autocomplete="one-time-code" maxlength="11" placeholder="Device code" aria-label="Device link code"><button id="deviceTransferBtn" class="secondary" type="button">Link</button></div>
+        <small id="deviceTransferStatus" class="muted"></small>
       </section>
 
       <section id="contactsWidget" class="homeWidget contactsWidget hidden">
@@ -152,7 +168,7 @@
       <p class="muted"><b>Fastest:</b> send them the short code below. They can open Bloop on any device, type it, and join. The full link is optional.</p>
       <div class="shareRow"><input id="shareLink" readonly /><button id="copyBtn">Copy link</button></div>
       <label class="shareCodeLabel">Your 4-digit Bloop code</label>
-      <div class="shareRow"><input id="shareCode" readonly placeholder="1240" /><button id="copyCodeBtn" type="button">Copy code</button></div><div class="customQuickCode"><input id="customQuickCode" inputmode="numeric" maxlength="4" placeholder="Choose 4 digits"><button id="setQuickCodeBtn" class="secondary" type="button">Set my code</button></div><small id="quickCodeStatus" class="muted">Change it to any available 4-digit code.</small>
+      <div class="shareRow"><input id="shareCode" readonly placeholder="4-digit code" /><button id="copyCodeBtn" type="button">Copy code</button></div><div class="customQuickCode"><input id="customQuickCode" inputmode="numeric" maxlength="4" placeholder="e.g. 4827"><button id="setQuickCodeBtn" class="secondary" type="button">Set my code</button></div><small id="quickCodeStatus" class="muted">Change it to any available 4-digit code.</small>
       <button id="enterBtn" class="primary">Go to my chat</button>
     </section>
 
@@ -163,7 +179,7 @@
           <img id="themAvatarTop" class="avatar partnerAvatar" alt="">
           <div class="partnerText"><strong id="chatPartnerName">Friend</strong><div class="presenceLine"><span id="presenceDot" class="presenceDot offline"></span><div id="presence" class="presence">Connecting…</div></div></div>
         </div>
-        <div class="topActions"><span id="chatClock" class="chatClock">--:--</span><button id="refreshStatusBtn" class="iconBtn refreshStatusBtn" type="button" aria-label="Refresh online status" title="Refresh online / last seen">↻</button><button id="chatPrivacyBtn" class="iconBtn" aria-label="Blur screen now" title="Blur screen now">◉</button><button id="emergencyBtn" class="iconBtn dangerBtn" aria-label="Emergency lock" title="Emergency lock">!</button><button id="profileBtn" class="iconBtn" aria-label="Profile and appearance">☺</button></div>
+        <div class="topActions"><span id="chatClock" class="chatClock">--:--</span><button id="refreshStatusBtn" class="iconBtn refreshStatusBtn" type="button" aria-label="Refresh online status" title="Refresh online / last seen">↻</button><button id="linkDeviceBtn" class="iconBtn linkDeviceBtn" type="button" aria-label="Link another device" title="Link another device">⇄</button><button id="chatPrivacyBtn" class="iconBtn" aria-label="Blur screen now" title="Blur screen now">◉</button><button id="emergencyBtn" class="iconBtn dangerBtn" aria-label="Emergency lock" title="Emergency lock">!</button><button id="profileBtn" class="iconBtn" aria-label="Profile and appearance">☺</button></div>
         <div id="chatCodeWrap" class="chatCodePill hidden" title="Bloop chat code"><span>Chat code <b id="chatCodeValue">—</b></span><button id="chatCodeCopy" type="button">Copy</button></div>
       </header>
 
@@ -249,6 +265,21 @@
   <div id="globalMessageToast" class="globalMessageToast hidden" role="status" aria-live="polite"></div>
 
 
+
+
+<dialog id="deviceTransferDialog" class="setupDialog deviceTransferDialog">
+  <form method="dialog" class="setupCard">
+    <button class="dialogClose" value="cancel" aria-label="Close">×</button>
+    <div class="deviceDialogBrand"><img src="/assets/bloop-icon.jpg" alt=""><div><span class="eyebrow">LINK A DEVICE</span><h2>Open this chat somewhere else</h2></div></div>
+    <p class="muted">On the other device, open Bloop and enter this one-time code. It expires in 10 minutes.</p>
+    <div class="deviceTransferCode" id="deviceTransferCode">—</div>
+    <div class="deviceTransferActions">
+      <button id="copyDeviceTransferCode" type="button" class="secondary">Copy code</button>
+      <button id="newDeviceTransferCode" type="button" class="secondary">New code</button>
+    </div>
+    <small id="deviceTransferExpiry" class="muted"></small>
+  </form>
+</dialog>
 
 </body>
 </html>

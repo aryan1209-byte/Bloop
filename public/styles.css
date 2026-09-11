@@ -811,3 +811,35 @@ body{padding-top:0!important}
 }
 \n/* v34 quick codes + People */
 .homeTabs{display:flex;gap:6px;margin:14px 0 4px;padding:4px;background:rgba(8,16,30,.58);border:1px solid var(--line);border-radius:16px}.homeTab{flex:1;border:0;border-radius:12px;padding:9px 12px;background:transparent;color:var(--muted);font-weight:800}.homeTab.active{background:rgba(255,255,255,.09);color:var(--ink)}.landing.peopleMode>:not(.homeHero):not(.homeLead):not(.homeTabs):not(.peoplePanel){display:none!important}.peoplePanel{display:grid;gap:14px;margin-top:14px}.peoplePanel.hidden{display:none!important}.peopleSearchRow,.customQuickCode{display:flex;gap:8px;align-items:center}.peopleSearchRow input,.customQuickCode input{flex:1;min-width:0}.peopleList{display:grid;gap:8px;margin-top:10px}.personRow{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:15px;background:rgba(255,255,255,.035)}.personAvatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;flex:0 0 38px;background:rgba(255,255,255,.08);border:1px solid var(--line);font-weight:900}.personInfo{display:flex;flex-direction:column;min-width:0;flex:1}.personInfo strong,.personInfo span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.personInfo span{font-size:11px;color:var(--muted)}.personActions{display:flex;align-items:center;gap:5px;flex-wrap:wrap;justify-content:flex-end}.smallPeopleBtn{padding:7px 10px!important;font-size:11px!important}.requestState{font-size:10px;color:var(--muted)}.peopleEmpty{padding:14px;text-align:center;color:var(--muted);font-size:12px;border:1px dashed var(--line);border-radius:13px}.customQuickCode{margin-top:8px}.customQuickCode input{text-align:center;font-size:17px;font-weight:900;letter-spacing:.16em}@media(max-width:650px){.homeTabs{margin:10px 0 2px}.personRow{padding:9px 8px}.personActions button{padding:6px 8px!important}.peopleSearchRow{align-items:stretch}}
+
+/* v35 cleanup */
+.appChrome{left:14px!important;right:14px!important;top:12px!important;justify-content:flex-end!important}
+.chromeLogo{width:34px;height:34px;border-radius:11px;object-fit:cover;margin-right:auto;border:1px solid rgba(255,255,255,.16);box-shadow:0 7px 20px rgba(0,0,0,.22)}
+.chromeStatus{display:flex;gap:7px;align-items:center}
+.clockPill,.batteryPill{min-height:34px;display:flex;align-items:center;gap:7px;background:rgba(20,24,31,.62)!important;color:#fff;border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:7px 11px;font-size:11px;font-weight:850;backdrop-filter:blur(20px) saturate(1.35);-webkit-backdrop-filter:blur(20px) saturate(1.35)}
+.batteryPill.hidden{display:none!important}.batteryIcon{width:22px;height:10px;border:1px solid rgba(255,255,255,.65);border-radius:3px;padding:1px;position:relative;display:block}.batteryIcon:after{content:"";position:absolute;right:-3px;top:3px;width:2px;height:4px;border-radius:0 2px 2px 0;background:rgba(255,255,255,.65)}.batteryIcon i{display:block;height:100%;border-radius:2px;background:#75df9c;width:50%}.batteryLow{border-color:rgba(255,111,111,.55)!important;color:#ffd0d0!important}.batteryLow .batteryIcon i{background:#ff6666}
+.quietWarning{position:fixed;z-index:9500;top:58px;right:16px;width:min(390px,calc(100vw - 32px));padding:10px 13px;border-radius:14px;background:rgba(18,26,40,.88);border:1px solid rgba(255,255,255,.13);box-shadow:0 12px 34px rgba(0,0,0,.22);color:#f5f8ff;font-size:12px;font-weight:700;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}.quietWarning.hidden{display:none!important}.quietWarning[data-kind="battery"]{border-color:rgba(255,193,82,.38)}.quietWarning[data-kind="night"]{border-color:rgba(160,139,255,.38)}
+.homeHero .logo img,.logo img{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}.homeHero .logo::before,.logo::before{display:none!important}
+.dangerBtn,#emergencyBtn{background:linear-gradient(145deg,#ff5f67,#d9273d)!important;color:white!important;border-color:#ff8990!important;box-shadow:0 7px 20px rgba(203,35,55,.24)!important}
+.linkDeviceBtn{color:#cfd7ff!important;background:rgba(97,88,220,.13)!important;border-color:rgba(130,120,255,.28)!important}
+.deviceDialogBrand{display:flex;align-items:center;gap:11px}.deviceDialogBrand img{width:44px;height:44px;border-radius:13px}.deviceDialogBrand h2{margin:2px 0 0}.deviceTransferCode{margin:14px 0 10px;padding:15px 17px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);font-size:26px;font-weight:900;letter-spacing:.08em;text-align:center;font-variant-numeric:tabular-nums;color:var(--ink)}.deviceTransferActions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.joinCodeRow input,#continueChatCode,#continueChatPin,.customQuickCode input{letter-spacing:.025em!important;text-transform:none!important}
+.joinCodeRow input::placeholder,#continueChatCode::placeholder,.customQuickCode input::placeholder{letter-spacing:0!important;font-family:inherit!important;font-weight:650!important}
+.customQuickCode{margin-top:7px!important}.customQuickCode input{padding:10px 12px!important;min-height:42px!important;font-size:15px!important}.customQuickCode button{min-height:42px!important}
+.peopleDirectoryWidget{border-color:rgba(90,211,198,.20)}
+.personActions{min-width:max-content}
+.pageWaterBg{background-image:linear-gradient(rgba(5,19,45,.14),rgba(5,19,45,.14)),url('/assets/water-bg-hd.jpg')!important;image-rendering:auto}
+.globalMessageToast strong{font-size:13px;letter-spacing:-.01em}
+
+@media(max-width:650px){
+  .appChrome{left:8px!important;right:8px!important;top:8px!important;gap:5px!important}
+  .chromeLogo{width:31px;height:31px;border-radius:10px}
+  .clockPill,.batteryPill{min-height:31px;padding:6px 8px;font-size:9px}
+  .privacyNowBtn,.globalEmergency{width:31px!important;height:31px!important}
+  .quietWarning{top:48px;right:8px;width:calc(100vw - 16px);font-size:11px}
+  .topActions{flex-wrap:wrap!important;justify-content:flex-end!important}
+  .topActions .iconBtn{width:31px!important;height:31px!important}
+  .customQuickCode{display:grid!important;grid-template-columns:1fr auto!important}
+  .customQuickCode input{width:100%!important}
+  .deviceTransferCode{font-size:21px}
+}

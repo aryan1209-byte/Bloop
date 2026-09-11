@@ -53,3 +53,13 @@ test
 - Home now has Chats and People tabs.
 - People supports username search, friend requests, accepting/declining, and messaging accepted friends.
 - Messaging a friend creates or reopens a normal Bloop chat.
+
+## v35 cleanup
+- Restores Link a device in chat and adds a home field for temporary device-link codes.
+- Quick Join and Continue Existing Chat now visibly use only 4-digit chat codes; old 8-character codes remain server-compatible only.
+- People tab now includes an Everyone directory and username search; existing profile usernames are backfilled into the directory.
+- Directory rows expose Message and Add friend actions.
+- Adds Bloop logo, day/date/time, supported-browser battery indicator, silent low-battery warning, and silent after-midnight reminder.
+- Incoming message notifications use playful Bloop titles.
+- Emergency button is visibly red inside chats.
+- Uses a 3x upscaled/sharpened copy of the existing water background asset for improved large-screen rendering.

@@ -363,13 +363,18 @@ async function showSystemNotification(title,body,roomId=currentRoom){
     const n=new Notification(title,{body,tag:`bloop-${roomId||'home'}`});n.onclick=()=>{window.focus();n.close();};return true;
   }catch{return false;}
 }
+function funNotificationTitle(name){
+  const options=[`💬 ${name} blooped you`,`✨ New Bloop from ${name}`,`👀 ${name} has something to say`,`🫧 ${name} sent a Bloop`,`⚡ ${name} just messaged`];
+  return options[Math.floor(Math.random()*options.length)];
+}
 async function notifyIncomingMessage(msg){
   if(msg?.sender===myRole)return;
   playTinyTing();
   const other=myRole==='creator'?'guest':'creator';const name=profiles[other]?.displayName||'Friend';
   const body=msg.type==='text'?(msg.body||'New message').slice(0,100):msg.type==='image'?'Sent a photo':msg.type==='audio'?'Sent a voice note':'Sent a message';
-  if(document.hidden) await showSystemNotification(name,body);
-  else if(appearance.notifications) showGlobalMessageToast(name,body);
+  const title=funNotificationTitle(name);
+  if(document.hidden) await showSystemNotification(title,body);
+  else if(appearance.notifications) showGlobalMessageToast(title,body);
 }
 $('testAlertsBtn')?.addEventListener('click',async()=>{
   await unlockAlertAudio();playTinyTing(true);
@@ -401,11 +406,49 @@ const funBits=[
 let funIndex=0;
 if($('funBtn'))$('funBtn').onclick=()=>{funIndex=(funIndex+1+Math.floor(Math.random()*(funBits.length-1)))%funBits.length;const bit=funBits[funIndex];if($('funType'))$('funType').textContent=bit.type.toUpperCase();if($('funResult'))$('funResult').textContent=bit.text;};
 
+function showQuietWarning(text,kind='info'){
+  const el=$('quietWarning');if(!el)return;
+  el.textContent=text;el.dataset.kind=kind;el.classList.remove('hidden');
+  clearTimeout(showQuietWarning.timer);
+  showQuietWarning.timer=setTimeout(()=>el.classList.add('hidden'),7000);
+}
 function updateClock(){
-  const text=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-  $('clock').textContent=text; $('chatClock').textContent=text;
+  const now=new Date();
+  const time=now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  const day=now.toLocaleDateString([],{weekday:'short',day:'numeric',month:'short'});
+  if($('clock'))$('clock').textContent=time;
+  if($('chatClock'))$('chatClock').textContent=time;
+  if($('dateClock'))$('dateClock').textContent=`${day} · ${time}`;
+  const hour=now.getHours();
+  const dayKey=now.toISOString().slice(0,10);
+  if(hour<5&&sessionStorage.getItem('bloop:midnightWarn')!==dayKey){
+    sessionStorage.setItem('bloop:midnightWarn',dayKey);
+    showQuietWarning('🌙 It’s after midnight — Bloop will stay quiet, but maybe get some sleep soon.','night');
+  }
 }
 updateClock(); setInterval(updateClock,15000);
+
+async function setupBatteryStatus(){
+  if(!navigator.getBattery)return;
+  try{
+    const battery=await navigator.getBattery(),pill=$('batteryPill'),text=$('batteryText'),fill=$('batteryFill');
+    if(!pill||!text||!fill)return;
+    pill.classList.remove('hidden');
+    const update=()=>{
+      const pct=Math.round(battery.level*100);
+      text.textContent=`${pct}%${battery.charging?' ⚡':''}`;
+      fill.style.width=`${Math.max(5,pct)}%`;
+      pill.classList.toggle('batteryLow',pct<=20&&!battery.charging);
+      const key=`${new Date().toISOString().slice(0,10)}:${pct<=10?'10':'20'}`;
+      if(pct<=20&&!battery.charging&&sessionStorage.getItem('bloop:batteryWarn')!==key){
+        sessionStorage.setItem('bloop:batteryWarn',key);
+        showQuietWarning(`🔋 Battery is at ${pct}%. No sound — just a heads-up.`,'battery');
+      }
+    };
+    update();battery.addEventListener('levelchange',update);battery.addEventListener('chargingchange',update);
+  }catch{}
+}
+setupBatteryStatus();
 
 const emojiData={
   'Recent':['😂','❤️','😭','🔥','👍','🥹','✨','👀','💀','🙏','🤣','😍','😊','🤨','😎','🫶'],
@@ -562,11 +605,11 @@ $('copyBtn').onclick=async()=>{await navigator.clipboard.writeText($('shareLink'
 $('chatCodeCopy')?.addEventListener('click',async()=>{const code=$('chatCodeValue')?.textContent?.trim();if(!code||code==='—')return;try{await navigator.clipboard.writeText(code);$('chatCodeCopy').textContent='Copied ✓';setTimeout(()=>$('chatCodeCopy').textContent='Copy',1100);}catch{}});
 $('copyCodeBtn')?.addEventListener('click',async()=>{const code=$('shareCode')?.value||'';if(!code)return;await navigator.clipboard.writeText(code);$('copyCodeBtn').textContent='Copied ✓';setTimeout(()=>$('copyCodeBtn').textContent='Copy code',1200);});
 $('customQuickCode')?.addEventListener('input',e=>{e.target.value=String(e.target.value||'').replace(/\D/g,'').slice(0,4);});$('setQuickCodeBtn')?.addEventListener('click',async()=>{const code=String($('customQuickCode')?.value||'').replace(/\D/g,'').slice(0,4),status=$('quickCodeStatus');if(code.length!==4){status.textContent='Choose exactly 4 digits.';return;}const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/quick-code`,{method:'POST',headers:{'content-type':'application/json','x-chat-token':authToken},body:JSON.stringify({code})});const d=await r.json().catch(()=>({}));if(!r.ok){status.textContent=d.error||'Could not set that code.';return;}$('shareCode').value=d.quickCode;$('customQuickCode').value='';status.textContent='Your code is now '+d.quickCode+' ✓';});
-function formatJoinCode(value){const original=String(value||'').trim(),digits=original.replace(/\D/g,'');if(/^\d*$/.test(original.replace(/[ -]/g,''))&&digits.length<=4)return digits.slice(0,4);const raw=original.toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,8);return raw.length>4?`${raw.slice(0,4)}-${raw.slice(4)}`:raw;}
+function formatJoinCode(value){return String(value||'').replace(/\D/g,'').slice(0,4);}
 $('joinCodeInput')?.addEventListener('input',e=>{e.target.value=formatJoinCode(e.target.value);$('joinCodeStatus').textContent='';});
 async function joinByCode(){
   const input=$('joinCodeInput');const status=$('joinCodeStatus');const code=formatJoinCode(input?.value);
-  const compact=code.replace('-','');if(!(/^\d{4}$/.test(compact)||compact.length===8)){if(status)status.textContent='Enter the 4-digit Bloop code.';return;}
+  if(!/^\d{4}$/.test(code)){if(status)status.textContent='Enter the 4-digit Bloop code.';return;}
   if(status)status.textContent='Joining…';
   try{
     const r=await fetch('/api/join-code',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code})});const data=await r.json();
@@ -584,7 +627,7 @@ async function continueExistingChat(){
   const code=formatJoinCode($('continueChatCode')?.value||'');
   const pin=String($('continueChatPin')?.value||'').replace(/\D/g,'').slice(0,4);
   const status=$('continueChatStatus');
-  const compact=code.replace('-','');if(!(/^\d{4}$/.test(compact)||compact.length===8)){if(status)status.textContent='Enter the 4-digit chat code.';return;}
+  if(!/^\d{4}$/.test(code)){if(status)status.textContent='Enter the 4-digit chat code.';return;}
   if(pin.length!==4){if(status)status.textContent='Enter your 4-digit device PIN.';return;}
   if(status)status.textContent='Opening chat…';
   try{
@@ -599,6 +642,41 @@ async function continueExistingChat(){
 }
 $('continueChatBtn')?.addEventListener('click',continueExistingChat);
 $('continueChatPin')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();continueExistingChat();}});
+
+function formatDeviceTransferCode(value){const raw=String(value||'').toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,10);return raw.length>5?`${raw.slice(0,5)}-${raw.slice(5)}`:raw;}
+$('deviceTransferInput')?.addEventListener('input',e=>{e.target.value=formatDeviceTransferCode(e.target.value);if($('deviceTransferStatus'))$('deviceTransferStatus').textContent='';});
+async function redeemDeviceTransferCode(){
+  const input=$('deviceTransferInput'),status=$('deviceTransferStatus'),code=formatDeviceTransferCode(input?.value);
+  if(code.replace('-','').length!==10){if(status)status.textContent='Enter the full device-link code.';return;}
+  if(status)status.textContent='Linking this device…';
+  const r=await fetch('/api/device-transfer/redeem',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code})});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){if(status)status.textContent=d.error||'Could not link this device.';return;}
+  currentRoom=d.roomId;authToken=d.authToken;myRole=d.role;
+  localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);rememberRoom(currentRoom);
+  if(status)status.textContent='Linked ✓';await openChat(true);
+}
+$('deviceTransferBtn')?.addEventListener('click',redeemDeviceTransferCode);
+$('deviceTransferInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();redeemDeviceTransferCode();}});
+
+let deviceTransferExpiryTimer=null;
+function renderDeviceTransferExpiry(expiresAt){
+  clearInterval(deviceTransferExpiryTimer);const el=$('deviceTransferExpiry');
+  const tick=()=>{const ms=Number(expiresAt)-Date.now();if(!el)return;if(ms<=0){el.textContent='Expired — tap New code.';clearInterval(deviceTransferExpiryTimer);return;}const m=Math.floor(ms/60000),sec=Math.floor((ms%60000)/1000);el.textContent=`Expires in ${m}:${String(sec).padStart(2,'0')}`;};
+  tick();deviceTransferExpiryTimer=setInterval(tick,1000);
+}
+async function createDeviceTransferCode(){
+  if(!currentRoom||!authToken)return;
+  const codeEl=$('deviceTransferCode'),expiry=$('deviceTransferExpiry');if(codeEl)codeEl.textContent='Creating…';if(expiry)expiry.textContent='';
+  const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/device-transfer-code`,{method:'POST',headers:{'x-chat-token':authToken}});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){if(codeEl)codeEl.textContent='Could not create code';return;}
+  if(codeEl)codeEl.textContent=d.code;renderDeviceTransferExpiry(d.expiresAt);
+}
+$('linkDeviceBtn')?.addEventListener('click',async()=>{const dlg=$('deviceTransferDialog');if(!dlg)return;dlg.showModal();await createDeviceTransferCode();});
+$('newDeviceTransferCode')?.addEventListener('click',createDeviceTransferCode);
+$('copyDeviceTransferCode')?.addEventListener('click',async()=>{const code=$('deviceTransferCode')?.textContent?.trim();if(!code||code==='—'||code.includes('Creating')||code.includes('Could not'))return;try{await navigator.clipboard.writeText(code);const b=$('copyDeviceTransferCode');b.textContent='Copied ✓';setTimeout(()=>b.textContent='Copy code',1000);}catch{}});
+
 
 
 $('enterBtn').onclick=()=>{
@@ -890,15 +968,91 @@ $('saveIdentity').onclick=async()=>{
 };
 
 function peopleHeaders(){const t=localStorage.getItem(peopleTokenKey);return t?{'x-people-token':t}:{};}
-async function ensurePeopleAccount(){const identity=getIdentity(),status=$('peopleStatus');if(!identity?.name||!identity?.username){if(status)status.textContent='Set your Name + Username in Profile first.';return false;}const r=await fetch('/api/people/register',{method:'POST',headers:{'content-type':'application/json',...peopleHeaders()},body:JSON.stringify({displayName:identity.name,username:identity.username})}),d=await r.json().catch(()=>({}));if(!r.ok){if(status)status.textContent=d.error||'Could not set up People.';return false;}if(d.peopleToken)localStorage.setItem(peopleTokenKey,d.peopleToken);return true;}
-function personRow(p,a=''){const initial=escapeHtml((p.displayName||p.username||'?').charAt(0).toUpperCase());return `<div class="personRow"><div class="personAvatar">${initial}</div><div class="personInfo"><strong>${escapeHtml(p.displayName||p.username)}</strong><span>@${escapeHtml(p.username)}</span></div><div class="personActions">${a}</div></div>`;}
-async function loadPeopleDashboard(){if(!(await ensurePeopleAccount()))return;const r=await fetch('/api/people/me',{headers:peopleHeaders(),cache:'no-store'}),d=await r.json().catch(()=>({}));if(!r.ok)return;$('friendRequestCount').textContent=d.incoming?.length?`${d.incoming.length} waiting`:'';$('friendsCount').textContent=d.friends?.length?String(d.friends.length):'';$('friendRequestsList').innerHTML=d.incoming?.length?d.incoming.map(p=>personRow(p,`<button class="secondary" data-accept-request="${p.id}">Accept</button><button class="tinyBtn" data-decline-request="${p.id}">Decline</button>`)).join(''):'<div class="peopleEmpty">No friend requests.</div>';$('friendsList').innerHTML=d.friends?.length?d.friends.map(p=>personRow(p,`<button class="primary smallPeopleBtn" data-message-person="${p.id}">Message</button>`)).join(''):'<div class="peopleEmpty">No friends yet.</div>';}
-async function searchPeople(){if(!(await ensurePeopleAccount()))return;const q=String($('peopleSearchInput')?.value||'').trim().replace(/^@/,''),status=$('peopleStatus');if(q.length<2){status.textContent='Type at least 2 characters.';return;}status.textContent='Searching…';const r=await fetch(`/api/people/search?q=${encodeURIComponent(q)}`,{headers:peopleHeaders(),cache:'no-store'}),d=await r.json().catch(()=>({}));if(!r.ok){status.textContent=d.error||'Search failed.';return;}status.textContent='';$('peopleSearchResults').innerHTML=d.results?.length?d.results.map(p=>personRow(p,p.state==='friends'?`<button class="primary smallPeopleBtn" data-message-person="${p.id}">Message</button>`:p.state==='outgoing'?'<span class="requestState">Requested</span>':p.state==='incoming'?'<span class="requestState">Request waiting</span>':`<button class="secondary" data-add-person="${p.id}">Add friend</button>`)).join(''):'<div class="peopleEmpty">No usernames found.</div>';}
-async function sendFriendRequest(id){const r=await fetch(`/api/people/${encodeURIComponent(id)}/request`,{method:'POST',headers:peopleHeaders()}),d=await r.json().catch(()=>({}));if(!r.ok)return alert(d.error||'Could not send request.');await searchPeople();await loadPeopleDashboard();}
-async function respondFriendRequest(id,action){const r=await fetch(`/api/people/requests/${id}/respond`,{method:'POST',headers:{'content-type':'application/json',...peopleHeaders()},body:JSON.stringify({action})}),d=await r.json().catch(()=>({}));if(!r.ok)return alert(d.error||'Could not update request.');await loadPeopleDashboard();}
-async function messagePerson(id){const r=await fetch(`/api/people/${encodeURIComponent(id)}/message`,{method:'POST',headers:peopleHeaders()}),d=await r.json().catch(()=>({}));if(!r.ok)return alert(d.error||'Could not open chat.');currentRoom=d.roomId;authToken=d.authToken;myRole=d.role;localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);rememberRoom(currentRoom);await openChat(true);}
-function setHomeTab(tab){const people=tab==='people';$('landing').classList.toggle('peopleMode',people);$('peoplePanel').classList.toggle('hidden',!people);$('homeChatsTab').classList.toggle('active',!people);$('homePeopleTab').classList.toggle('active',people);if(people)loadPeopleDashboard();}
-$('homeChatsTab')?.addEventListener('click',()=>setHomeTab('chats'));$('homePeopleTab')?.addEventListener('click',()=>setHomeTab('people'));$('peopleSearchBtn')?.addEventListener('click',searchPeople);$('peopleSearchInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchPeople();}});$('peoplePanel')?.addEventListener('click',e=>{const a=e.target.closest('[data-add-person]'),b=e.target.closest('[data-accept-request]'),c=e.target.closest('[data-decline-request]'),m=e.target.closest('[data-message-person]');if(a)sendFriendRequest(a.dataset.addPerson);else if(b)respondFriendRequest(b.dataset.acceptRequest,'accept');else if(c)respondFriendRequest(c.dataset.declineRequest,'decline');else if(m)messagePerson(m.dataset.messagePerson);});
+async function ensurePeopleAccount(){
+  const identity=getIdentity(),status=$('peopleStatus');
+  if(!identity?.name||!identity?.username){if(status)status.textContent='Set your Name + Username in Profile first.';return false;}
+  const r=await fetch('/api/people/register',{method:'POST',headers:{'content-type':'application/json',...peopleHeaders()},body:JSON.stringify({displayName:identity.name,username:identity.username})});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){if(status)status.textContent=d.error||'Could not set up People.';return false;}
+  if(d.peopleToken)localStorage.setItem(peopleTokenKey,d.peopleToken);
+  return true;
+}
+function personRow(p,actions=''){
+  const initial=escapeHtml((p.displayName||p.username||'?').trim().charAt(0).toUpperCase()||'?');
+  return `<div class="personRow"><div class="personAvatar">${initial}</div><div class="personInfo"><strong>${escapeHtml(p.displayName||p.username)}</strong><span>@${escapeHtml(p.username)}</span></div><div class="personActions">${actions}</div></div>`;
+}
+function directoryActions(p){
+  const message=`<button class="primary smallPeopleBtn" data-message-person="${p.id}">Message</button>`;
+  if(p.state==='friends')return message+`<span class="requestState">Friends</span>`;
+  if(p.state==='outgoing')return message+`<span class="requestState">Requested</span>`;
+  if(p.state==='incoming')return message+`<span class="requestState">Request waiting</span>`;
+  return message+`<button class="secondary" data-add-person="${p.id}">Add friend</button>`;
+}
+async function loadPeopleDirectory(q=''){
+  if(!(await ensurePeopleAccount()))return;
+  const target=$('peopleDirectoryList');if(target)target.innerHTML='<div class="peopleEmpty">Loading people…</div>';
+  const r=await fetch(`/api/people/discover${q?`?q=${encodeURIComponent(q)}`:''}`,{headers:peopleHeaders(),cache:'no-store'});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){if(target)target.innerHTML='<div class="peopleEmpty">Could not load people.</div>';return;}
+  const rows=d.people||[];
+  if(target)target.innerHTML=rows.length?rows.map(p=>personRow(p,directoryActions(p))).join(''):'<div class="peopleEmpty">Nobody else is in the Bloop directory yet.</div>';
+}
+async function loadPeopleDashboard(){
+  if(!(await ensurePeopleAccount()))return;
+  const r=await fetch('/api/people/me',{headers:peopleHeaders(),cache:'no-store'}),d=await r.json().catch(()=>({}));
+  if(r.ok){
+    $('friendRequestCount').textContent=d.incoming?.length?`${d.incoming.length} waiting`:'';
+    $('friendsCount').textContent=d.friends?.length?String(d.friends.length):'';
+    $('friendRequestsList').innerHTML=d.incoming?.length?d.incoming.map(p=>personRow(p,`<button class="secondary" data-accept-request="${p.id}">Accept</button><button class="tinyBtn" data-decline-request="${p.id}">Decline</button>`)).join(''):'<div class="peopleEmpty">No friend requests.</div>';
+    $('friendsList').innerHTML=d.friends?.length?d.friends.map(p=>personRow(p,`<button class="primary smallPeopleBtn" data-message-person="${p.id}">Message</button>`)).join(''):'<div class="peopleEmpty">No friends yet.</div>';
+  }
+  await loadPeopleDirectory();
+}
+async function searchPeople(){
+  if(!(await ensurePeopleAccount()))return;
+  const q=String($('peopleSearchInput')?.value||'').trim().replace(/^@/,'');
+  const status=$('peopleStatus');
+  if(q.length<2){status.textContent='Type at least 2 characters.';return;}
+  status.textContent='Searching…';
+  const r=await fetch(`/api/people/discover?q=${encodeURIComponent(q)}`,{headers:peopleHeaders(),cache:'no-store'}),d=await r.json().catch(()=>({}));
+  if(!r.ok){status.textContent=d.error||'Search failed.';return;}
+  status.textContent='';
+  const rows=d.people||[];
+  $('peopleSearchResults').innerHTML=rows.length?rows.map(p=>personRow(p,directoryActions(p))).join(''):'<div class="peopleEmpty">No usernames found.</div>';
+}
+async function sendFriendRequest(id){
+  const r=await fetch(`/api/people/${encodeURIComponent(id)}/request`,{method:'POST',headers:peopleHeaders()}),d=await r.json().catch(()=>({}));
+  if(!r.ok)return alert(d.error||'Could not send request.');
+  await loadPeopleDashboard();if($('peopleSearchInput')?.value.trim())await searchPeople();
+}
+async function respondFriendRequest(id,action){
+  const r=await fetch(`/api/people/requests/${id}/respond`,{method:'POST',headers:{'content-type':'application/json',...peopleHeaders()},body:JSON.stringify({action})}),d=await r.json().catch(()=>({}));
+  if(!r.ok)return alert(d.error||'Could not update request.');
+  await loadPeopleDashboard();
+}
+async function messagePerson(id){
+  const r=await fetch(`/api/people/${encodeURIComponent(id)}/message`,{method:'POST',headers:peopleHeaders()}),d=await r.json().catch(()=>({}));
+  if(!r.ok)return alert(d.error||'Could not open chat.');
+  currentRoom=d.roomId;authToken=d.authToken;myRole=d.role;
+  localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);rememberRoom(currentRoom);
+  await openChat(true);
+}
+function setHomeTab(tab){
+  const people=tab==='people';
+  $('landing').classList.toggle('peopleMode',people);$('peoplePanel').classList.toggle('hidden',!people);
+  $('homeChatsTab').classList.toggle('active',!people);$('homePeopleTab').classList.toggle('active',people);
+  if(people)loadPeopleDashboard();
+}
+$('homeChatsTab')?.addEventListener('click',()=>setHomeTab('chats'));
+$('homePeopleTab')?.addEventListener('click',()=>setHomeTab('people'));
+$('peopleSearchBtn')?.addEventListener('click',searchPeople);
+$('refreshPeopleBtn')?.addEventListener('click',()=>loadPeopleDashboard());
+$('peopleSearchInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchPeople();}});
+$('peoplePanel')?.addEventListener('click',e=>{
+  const add=e.target.closest('[data-add-person]'),accept=e.target.closest('[data-accept-request]'),decline=e.target.closest('[data-decline-request]'),msg=e.target.closest('[data-message-person]');
+  if(add)sendFriendRequest(add.dataset.addPerson);else if(accept)respondFriendRequest(accept.dataset.acceptRequest,'accept');else if(decline)respondFriendRequest(decline.dataset.declineRequest,'decline');else if(msg)messagePerson(msg.dataset.messagePerson);
+});
+setTimeout(()=>{if(getIdentity()?.username)ensurePeopleAccount().catch(()=>{});},500);
 
 function showEmergencyLock(){socket?.disconnect();setTyping(false);$('lockScreen').classList.remove('hidden');$('unlockPassword').value='';$('unlockError').textContent='';setTimeout(()=>$('unlockPassword').focus(),50);}
 function hideEmergencyLock(){$('lockScreen').classList.add('hidden');}

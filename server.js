@@ -228,6 +228,23 @@ function peopleAuth(req){const raw=req.header('x-people-token');if(!raw)return n
 function friendshipPair(a,b){return a<b?[a,b]:[b,a];}
 function areFriends(a,b){const [x,y]=friendshipPair(a,b);return Boolean(db.prepare('SELECT 1 FROM friendships WHERE person_a=? AND person_b=?').get(x,y));}
 function publicPerson(id){return db.prepare('SELECT id,username,display_name AS displayName FROM people WHERE id=?').get(id)||null;}
+function backfillPeopleDirectory(){
+  const rows=db.prepare(`SELECT username, MAX(display_name) AS displayName
+                         FROM profiles
+                         WHERE username IS NOT NULL AND TRIM(username) != ''
+                         GROUP BY LOWER(username)`).all();
+  const now=Date.now();
+  for(const row of rows){
+    const username=cleanUsername(row.username).toLowerCase();
+    if(username.length<3) continue;
+    if(db.prepare('SELECT 1 FROM people WHERE username=? COLLATE NOCASE').get(username)) continue;
+    const id=token(12);
+    db.prepare('INSERT OR IGNORE INTO people(id,username,display_name,owner_token_hash,created_at,updated_at) VALUES(?,?,?,?,?,?)')
+      .run(id,username,cleanName(row.displayName)||username,`legacy:${sha256(username)}`,now,now);
+  }
+}
+backfillPeopleDirectory();
+
 
 function contactStatePayload(room, role) {
   const removedBy = room?.contact_removed_by || null;
@@ -368,12 +385,58 @@ app.use((req, res, next) => {
 });
 
 
-app.post('/api/people/register',(req,res)=>{const displayName=cleanName(req.body?.displayName),username=cleanUsername(req.body?.username).toLowerCase();if(!displayName||username.length<3)return res.status(400).json({error:'Use a name and a username with at least 3 characters.'});const existing=peopleAuth(req);if(existing){if(db.prepare('SELECT id FROM people WHERE username=? COLLATE NOCASE AND id!=?').get(username,existing.id))return res.status(409).json({error:'That username is already taken.'});db.prepare('UPDATE people SET username=?,display_name=?,updated_at=? WHERE id=?').run(username,displayName,Date.now(),existing.id);return res.json({profile:publicPerson(existing.id)});}if(db.prepare('SELECT 1 FROM people WHERE username=? COLLATE NOCASE').get(username))return res.status(409).json({error:'That username is already taken.'});const peopleToken=token(32),id=token(12),now=Date.now();db.prepare('INSERT INTO people(id,username,display_name,owner_token_hash,created_at,updated_at) VALUES(?,?,?,?,?,?)').run(id,username,displayName,sha256(peopleToken),now,now);res.json({peopleToken,profile:publicPerson(id)});});
+app.post('/api/people/register',(req,res)=>{
+  const displayName=cleanName(req.body?.displayName),username=cleanUsername(req.body?.username).toLowerCase();
+  if(!displayName||username.length<3)return res.status(400).json({error:'Use a name and a username with at least 3 characters.'});
+  const existing=peopleAuth(req);
+  if(existing){
+    const taken=db.prepare('SELECT id FROM people WHERE username=? COLLATE NOCASE AND id!=?').get(username,existing.id);
+    if(taken)return res.status(409).json({error:'That username is already taken.'});
+    db.prepare('UPDATE people SET username=?,display_name=?,updated_at=? WHERE id=?').run(username,displayName,Date.now(),existing.id);
+    return res.json({profile:publicPerson(existing.id)});
+  }
+  const same=db.prepare('SELECT id,owner_token_hash AS ownerHash FROM people WHERE username=? COLLATE NOCASE').get(username);
+  const peopleToken=token(32),now=Date.now();
+  if(same){
+    if(!String(same.ownerHash||'').startsWith('legacy:'))return res.status(409).json({error:'That username is already taken.'});
+    db.prepare('UPDATE people SET display_name=?,owner_token_hash=?,updated_at=? WHERE id=?')
+      .run(displayName,sha256(peopleToken),now,same.id);
+    return res.json({peopleToken,profile:publicPerson(same.id)});
+  }
+  const id=token(12);
+  db.prepare('INSERT INTO people(id,username,display_name,owner_token_hash,created_at,updated_at) VALUES(?,?,?,?,?,?)')
+    .run(id,username,displayName,sha256(peopleToken),now,now);
+  res.json({peopleToken,profile:publicPerson(id)});
+});
 app.get('/api/people/me',(req,res)=>{const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Set up your Bloop username first.'});const friends=db.prepare(`SELECT p.id,p.username,p.display_name AS displayName FROM friendships f JOIN people p ON p.id=CASE WHEN f.person_a=? THEN f.person_b ELSE f.person_a END WHERE f.person_a=? OR f.person_b=? ORDER BY p.display_name COLLATE NOCASE`).all(me.id,me.id,me.id);const incoming=db.prepare(`SELECT fr.id,p.id AS personId,p.username,p.display_name AS displayName FROM friend_requests fr JOIN people p ON p.id=fr.sender_id WHERE fr.receiver_id=? AND fr.status='pending' ORDER BY fr.created_at DESC`).all(me.id);const outgoing=db.prepare(`SELECT fr.id,p.id AS personId,p.username,p.display_name AS displayName FROM friend_requests fr JOIN people p ON p.id=fr.receiver_id WHERE fr.sender_id=? AND fr.status='pending' ORDER BY fr.created_at DESC`).all(me.id);res.json({profile:publicPerson(me.id),friends,incoming,outgoing});});
+app.get('/api/people/discover',(req,res)=>{
+  backfillPeopleDirectory();
+  const me=peopleAuth(req);
+  if(!me)return res.status(401).json({error:'Set up your Bloop username first.'});
+  const q=cleanUsername(req.query.q||'').toLowerCase();
+  let rows;
+  if(q.length>=2){
+    rows=db.prepare(`SELECT id,username,display_name AS displayName,owner_token_hash AS ownerHash
+                     FROM people WHERE id!=? AND (username LIKE ? OR display_name LIKE ?)
+                     ORDER BY username COLLATE NOCASE LIMIT 100`)
+      .all(me.id,`%${q}%`,`%${String(req.query.q||'').trim()}%`);
+  }else{
+    rows=db.prepare(`SELECT id,username,display_name AS displayName,owner_token_hash AS ownerHash
+                     FROM people WHERE id!=? ORDER BY username COLLATE NOCASE LIMIT 100`).all(me.id);
+  }
+  const people=rows.map(p=>({
+    id:p.id,username:p.username,displayName:p.displayName,
+    activeDirectory:!String(p.ownerHash||'').startsWith('legacy:'),
+    state:areFriends(me.id,p.id)?'friends':
+      db.prepare("SELECT 1 FROM friend_requests WHERE sender_id=? AND receiver_id=? AND status='pending'").get(me.id,p.id)?'outgoing':
+      db.prepare("SELECT 1 FROM friend_requests WHERE sender_id=? AND receiver_id=? AND status='pending'").get(p.id,me.id)?'incoming':'none'
+  }));
+  res.json({people});
+});
 app.get('/api/people/search',(req,res)=>{const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Set up your Bloop username first.'});const q=cleanUsername(req.query.q||'').toLowerCase();if(q.length<2)return res.json({results:[]});const rows=db.prepare(`SELECT id,username,display_name AS displayName FROM people WHERE id!=? AND (username LIKE ? OR display_name LIKE ?) ORDER BY CASE WHEN username=? THEN 0 ELSE 1 END,username LIMIT 20`).all(me.id,`%${q}%`,`%${String(req.query.q||'').trim()}%`,q);res.json({results:rows.map(p=>({...p,state:areFriends(me.id,p.id)?'friends':db.prepare("SELECT 1 FROM friend_requests WHERE sender_id=? AND receiver_id=? AND status='pending'").get(me.id,p.id)?'outgoing':db.prepare("SELECT 1 FROM friend_requests WHERE sender_id=? AND receiver_id=? AND status='pending'").get(p.id,me.id)?'incoming':'none'}))});});
 app.post('/api/people/:personId/request',(req,res)=>{const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Not signed into People.'});const other=publicPerson(req.params.personId);if(!other)return res.status(404).json({error:'Person not found.'});if(other.id===me.id)return res.status(400).json({error:'That is you.'});if(areFriends(me.id,other.id))return res.json({state:'friends'});const reverse=db.prepare("SELECT id FROM friend_requests WHERE sender_id=? AND receiver_id=? AND status='pending'").get(other.id,me.id);if(reverse){db.prepare("UPDATE friend_requests SET status='accepted',responded_at=? WHERE id=?").run(Date.now(),reverse.id);const [a,b]=friendshipPair(me.id,other.id);db.prepare('INSERT OR IGNORE INTO friendships(person_a,person_b,created_at) VALUES(?,?,?)').run(a,b,Date.now());return res.json({state:'friends'});}db.prepare(`INSERT INTO friend_requests(sender_id,receiver_id,status,created_at) VALUES(?,?,'pending',?) ON CONFLICT(sender_id,receiver_id) DO UPDATE SET status='pending',created_at=excluded.created_at,responded_at=NULL`).run(me.id,other.id,Date.now());res.json({state:'outgoing'});});
 app.post('/api/people/requests/:requestId/respond',(req,res)=>{const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Not signed into People.'});const fr=db.prepare("SELECT * FROM friend_requests WHERE id=? AND receiver_id=? AND status='pending'").get(req.params.requestId,me.id);if(!fr)return res.status(404).json({error:'Request not found.'});const action=req.body?.action==='accept'?'accepted':'declined';db.prepare('UPDATE friend_requests SET status=?,responded_at=? WHERE id=?').run(action,Date.now(),fr.id);if(action==='accepted'){const [a,b]=friendshipPair(fr.sender_id,fr.receiver_id);db.prepare('INSERT OR IGNORE INTO friendships(person_a,person_b,created_at) VALUES(?,?,?)').run(a,b,Date.now());}res.json({ok:true,state:action});});
-app.post('/api/people/:personId/message',(req,res)=>{const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Not signed into People.'});const other=publicPerson(req.params.personId);if(!other)return res.status(404).json({error:'Person not found.'});if(!areFriends(me.id,other.id))return res.status(403).json({error:'Accept the friend request first.'});const [a,b]=friendshipPair(me.id,other.id);let link=db.prepare('SELECT room_id AS roomId FROM people_chats WHERE person_a=? AND person_b=?').get(a,b),roomId=link?.roomId;if(!roomId){roomId=token(12);const now=Date.now(),joinCode=makeJoinCode(),quickCode=availableQuickCode();db.prepare(`INSERT INTO rooms(id,share_token_hash,join_code_hash,join_code,quick_code_hash,quick_code,creator_token_hash,guest_token_hash,invite_status,invite_status_at,created_at) VALUES(?,?,?,?,?,?,?,?, 'accepted', ?,?)`).run(roomId,sha256(token(24)),sha256(normalizeJoinCode(joinCode)),joinCode,quickCode?sha256(quickCode):null,quickCode,sha256(token(32)),sha256(token(32)),now,now);const creator=publicPerson(a),guest=publicPerson(b);db.prepare(`INSERT INTO profiles(room_id,role,display_name,username) VALUES(?,'creator',?,?),(?,'guest',?,?)`).run(roomId,creator.displayName,creator.username,roomId,guest.displayName,guest.username);db.prepare('INSERT INTO people_chats(person_a,person_b,room_id,created_at) VALUES(?,?,?,?)').run(a,b,roomId,now);}const role=me.id===a?'creator':'guest',authToken=issueAdditionalAccessToken(roomId,role);res.json({roomId,role,authToken});});
+app.post('/api/people/:personId/message',(req,res)=>{const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Not signed into People.'});const other=publicPerson(req.params.personId);if(!other)return res.status(404).json({error:'Person not found.'});const [a,b]=friendshipPair(me.id,other.id);let link=db.prepare('SELECT room_id AS roomId FROM people_chats WHERE person_a=? AND person_b=?').get(a,b),roomId=link?.roomId;if(!roomId){roomId=token(12);const now=Date.now(),joinCode=makeJoinCode(),quickCode=availableQuickCode();db.prepare(`INSERT INTO rooms(id,share_token_hash,join_code_hash,join_code,quick_code_hash,quick_code,creator_token_hash,guest_token_hash,invite_status,invite_status_at,created_at) VALUES(?,?,?,?,?,?,?,?, 'accepted', ?,?)`).run(roomId,sha256(token(24)),sha256(normalizeJoinCode(joinCode)),joinCode,quickCode?sha256(quickCode):null,quickCode,sha256(token(32)),sha256(token(32)),now,now);const creator=publicPerson(a),guest=publicPerson(b);db.prepare(`INSERT INTO profiles(room_id,role,display_name,username) VALUES(?,'creator',?,?),(?,'guest',?,?)`).run(roomId,creator.displayName,creator.username,roomId,guest.displayName,guest.username);db.prepare('INSERT INTO people_chats(person_a,person_b,room_id,created_at) VALUES(?,?,?,?)').run(a,b,roomId,now);}const role=me.id===a?'creator':'guest',authToken=issueAdditionalAccessToken(roomId,role);res.json({roomId,role,authToken});});
 
 app.post('/api/rooms', (_req, res) => {
   const roomId = token(12);
