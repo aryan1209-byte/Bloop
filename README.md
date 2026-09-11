@@ -73,3 +73,9 @@ test
 
 ## v38 stability repair
 Restored the complete v36 chat/profile/privacy client after the v37 frontend regression; kept account sign-in backend; added small theme labels.
+
+## v40 account migration fix
+- Existing bloop accounts from the old device-PIN builds can now sign in using the PIN already saved on their chats.
+- The first successful legacy sign-in upgrades that PIN into the bloop account PIN.
+- Entering the same existing account details in Edit profile also signs into that account instead of incorrectly saying the username is taken.
+- Existing accounts with no account PIN are backfilled from their most recently saved chat PIN at startup when possible.

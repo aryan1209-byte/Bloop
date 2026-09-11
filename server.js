@@ -262,6 +262,33 @@ function issuePeopleSession(personId){const raw=token(32);db.prepare('INSERT INT
 const peopleLoginAttempts=new Map();
 function peopleLoginAllowed(key){const now=Date.now(),windowMs=10*60*1000,max=6;const row=peopleLoginAttempts.get(key)||{start:now,count:0};if(now-row.start>windowMs){row.start=now;row.count=0;}row.count++;peopleLoginAttempts.set(key,row);return row.count<=max;}
 function clearPeopleLoginAttempts(key){peopleLoginAttempts.delete(key);}
+
+function legacyRoomPinMatches(username,pin){
+  if(!username||!/^\d{4}$/.test(String(pin||'')))return false;
+  return Boolean(db.prepare(`
+    SELECT 1
+    FROM profiles p
+    JOIN room_device_pins d ON d.room_id=p.room_id AND d.role=p.role
+    WHERE LOWER(COALESCE(p.username,''))=LOWER(?) AND d.pin_hash=?
+    LIMIT 1
+  `).get(username,sha256(String(pin))));
+}
+function backfillPeopleAccountPins(){
+  const rows=db.prepare(`SELECT id,username FROM people WHERE pin_hash IS NULL OR TRIM(pin_hash)=''`).all();
+  const latest=db.prepare(`
+    SELECT d.pin_hash AS pinHash
+    FROM profiles p
+    JOIN room_device_pins d ON d.room_id=p.room_id AND d.role=p.role
+    WHERE LOWER(COALESCE(p.username,''))=LOWER(?)
+    ORDER BY d.updated_at DESC
+    LIMIT 1
+  `);
+  const save=db.prepare('UPDATE people SET pin_hash=?,updated_at=? WHERE id=?');
+  const now=Date.now();
+  for(const row of rows){const hit=latest.get(row.username);if(hit?.pinHash)save.run(hit.pinHash,now,row.id);}
+}
+backfillPeopleAccountPins();
+
 function friendshipPair(a,b){return a<b?[a,b]:[b,a];}
 function areFriends(a,b){const [x,y]=friendshipPair(a,b);return Boolean(db.prepare('SELECT 1 FROM friendships WHERE person_a=? AND person_b=?').get(x,y));}
 function publicPerson(id){return db.prepare('SELECT id,username,display_name AS displayName,avatar_url AS avatarUrl FROM people WHERE id=?').get(id)||null;}
@@ -429,21 +456,68 @@ app.post('/api/people/register',(req,res)=>{
   if(!/^\d{4}$/.test(pin))return res.status(400).json({error:'Set a 4-digit account PIN.'});
   db.prepare('DELETE FROM people_directory_opt_out WHERE username=? COLLATE NOCASE').run(username);
   const existing=peopleAuth(req);
-  if(existing){const taken=db.prepare('SELECT id FROM people WHERE username=? COLLATE NOCASE AND id!=?').get(username,existing.id);if(taken)return res.status(409).json({error:'That username is already taken.'});db.prepare('UPDATE people SET username=?,display_name=?,pin_hash=?,updated_at=? WHERE id=?').run(username,displayName,sha256(pin),Date.now(),existing.id);return res.json({profile:publicPerson(existing.id)});}
-  const same=db.prepare('SELECT id,owner_token_hash AS ownerHash FROM people WHERE username=? COLLATE NOCASE').get(username),peopleToken=token(32),now=Date.now();
-  if(same){if(!String(same.ownerHash||'').startsWith('legacy:'))return res.status(409).json({error:'That username is already taken. Use Sign in instead.'});db.prepare('UPDATE people SET display_name=?,owner_token_hash=?,pin_hash=?,updated_at=? WHERE id=?').run(displayName,sha256(peopleToken),sha256(pin),now,same.id);return res.json({peopleToken,profile:publicPerson(same.id)});}
-  const id=token(12);db.prepare('INSERT INTO people(id,username,display_name,owner_token_hash,pin_hash,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(id,username,displayName,sha256(peopleToken),sha256(pin),now,now);res.json({peopleToken,profile:publicPerson(id)});
+  if(existing){
+    const taken=db.prepare('SELECT id FROM people WHERE username=? COLLATE NOCASE AND id!=?').get(username,existing.id);
+    if(taken)return res.status(409).json({error:'That username belongs to another bloop account.'});
+    db.prepare('UPDATE people SET username=?,display_name=?,pin_hash=?,updated_at=? WHERE id=?').run(username,displayName,sha256(pin),Date.now(),existing.id);
+    return res.json({profile:publicPerson(existing.id)});
+  }
+
+  const same=db.prepare('SELECT id,username,display_name AS displayName,owner_token_hash AS ownerHash,pin_hash AS pinHash FROM people WHERE username=? COLLATE NOCASE').get(username);
+  const peopleToken=token(32),now=Date.now(),pinHash=sha256(pin);
+  if(same){
+    const sameName=String(same.displayName||'').trim().toLowerCase()===displayName.trim().toLowerCase();
+    const accountPinMatches=Boolean(same.pinHash&&same.pinHash===pinHash);
+    const oldChatPinMatches=legacyRoomPinMatches(username,pin);
+
+    // Existing pre-account-PIN users can migrate with the PIN they already used for their chats.
+    if(sameName&&(accountPinMatches||oldChatPinMatches)){
+      if(!accountPinMatches)db.prepare('UPDATE people SET pin_hash=?,updated_at=? WHERE id=?').run(pinHash,now,same.id);
+      const sessionToken=issuePeopleSession(same.id);
+      return res.json({peopleToken:sessionToken,profile:publicPerson(same.id),signedIn:true,migratedPin:oldChatPinMatches&&!accountPinMatches});
+    }
+
+    if(String(same.ownerHash||'').startsWith('legacy:')){
+      db.prepare('UPDATE people SET display_name=?,owner_token_hash=?,pin_hash=?,updated_at=? WHERE id=?').run(displayName,sha256(peopleToken),pinHash,now,same.id);
+      return res.json({peopleToken,profile:publicPerson(same.id)});
+    }
+
+    return res.status(409).json({error:'That username already has a bloop account. Sign in with the same name and 4-digit PIN.'});
+  }
+
+  const id=token(12);
+  db.prepare('INSERT INTO people(id,username,display_name,owner_token_hash,pin_hash,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(id,username,displayName,sha256(peopleToken),pinHash,now,now);
+  res.json({peopleToken,profile:publicPerson(id)});
 });
 app.post('/api/people/sign-in',(req,res)=>{
   const username=cleanUsername(req.body?.username).toLowerCase(),displayName=cleanName(req.body?.displayName),pin=String(req.body?.pin||'').trim();
   if(username.length<3||!displayName||!/^\d{4}$/.test(pin))return res.status(400).json({error:'Enter your name, username and 4-digit PIN.'});
-  const attemptKey=`${req.ip||'ip'}:${username}`;if(!peopleLoginAllowed(attemptKey))return res.status(429).json({error:'Too many sign-in attempts. Try again in a few minutes.'});
+  const attemptKey=`${req.ip||'ip'}:${username}`;
+  if(!peopleLoginAllowed(attemptKey))return res.status(429).json({error:'Too many sign-in attempts. Try again in a few minutes.'});
+
   const person=db.prepare('SELECT id,username,display_name AS displayName,pin_hash AS pinHash,avatar_url AS avatarUrl FROM people WHERE username=? COLLATE NOCASE').get(username);
-  if(!person||!person.pinHash||person.pinHash!==sha256(pin)||person.displayName.trim().toLowerCase()!==displayName.trim().toLowerCase())return res.status(403).json({error:'Name, username or PIN is incorrect.'});
-  clearPeopleLoginAttempts(attemptKey);const peopleToken=issuePeopleSession(person.id);
+  if(!person)return res.status(403).json({error:'No bloop account exists with that username.'});
+
+  const nameMatches=person.displayName.trim().toLowerCase()===displayName.trim().toLowerCase();
+  const enteredHash=sha256(pin);
+  const accountPinMatches=Boolean(person.pinHash&&person.pinHash===enteredHash);
+  const oldChatPinMatches=nameMatches&&legacyRoomPinMatches(username,pin);
+
+  if(!nameMatches||(!accountPinMatches&&!oldChatPinMatches)){
+    return res.status(403).json({error:'Name, username or PIN is incorrect.'});
+  }
+
+  // Upgrade older accounts (or accounts created during the old device-PIN builds)
+  // so future sign-ins use the bloop account PIN directly.
+  if(!accountPinMatches&&oldChatPinMatches){
+    db.prepare('UPDATE people SET pin_hash=?,updated_at=? WHERE id=?').run(enteredHash,Date.now(),person.id);
+  }
+
+  clearPeopleLoginAttempts(attemptKey);
+  const peopleToken=issuePeopleSession(person.id);
   const memberships=db.prepare(`SELECT m.room_id AS roomId,m.role FROM people_room_members m JOIN rooms r ON r.id=m.room_id WHERE m.person_id=? ORDER BY m.created_at DESC`).all(person.id);
   const chats=memberships.map(m=>({roomId:m.roomId,role:m.role,authToken:issueAdditionalAccessToken(m.roomId,m.role)}));
-  res.json({peopleToken,profile:{id:person.id,username:person.username,displayName:person.displayName,avatarUrl:person.avatarUrl},chats});
+  res.json({peopleToken,profile:{id:person.id,username:person.username,displayName:person.displayName,avatarUrl:person.avatarUrl},chats,migratedPin:oldChatPinMatches&&!accountPinMatches});
 });
 app.post('/api/people/link-room',(req,res)=>{
   const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Sign in to your Bloop account first.'});const roomId=String(req.body?.roomId||''),chatToken=req.header('x-chat-token'),auth=authenticate(roomId,chatToken);if(!auth)return res.status(401).json({error:'That chat is not available on this device.'});
