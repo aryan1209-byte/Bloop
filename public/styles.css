@@ -854,3 +854,10 @@ body{padding-top:0!important}
 .accountSignInFields{display:grid;grid-template-columns:1fr 1fr 110px auto;gap:8px;align-items:center}.identityCard{position:relative}.identityCard .closeBtn{position:absolute;right:13px;top:13px}
 @media(max-width:650px){.accountSignInFields{grid-template-columns:1fr 1fr}.accountSignInFields>*{width:100%}}
 @media(max-width:460px){.accountSignInFields{grid-template-columns:1fr}.themeGrid{gap:16px 8px!important}}
+
+/* v39 exact circle selection + account avatar */
+.themeChoice{border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important}
+.themeChoice.selected{border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important}
+.themeChoice.selected .themeSwatch{outline:3px solid var(--accent)!important;outline-offset:4px!important;border-radius:50%!important}
+.personAvatar{overflow:hidden}.personAvatar img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
+.profileAtBtn{font-weight:800;font-size:18px}

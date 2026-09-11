@@ -619,7 +619,7 @@ async function joinByCode(){
     currentRoom=data.roomId;authToken=data.authToken;myRole=data.role;
     localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);rememberRoom(currentRoom);
     if(status)status.textContent='Joined ✓';openChat(true);
-  }catch{if(status)status.textContent='Could not connect. Try again.';}
+  }catch{if(status)status.textContent='Could not sign in. Check your details and try again.';}
 }
 $('joinCodeBtn')?.addEventListener('click',joinByCode);$('joinCodeInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();joinByCode();}});
 
@@ -630,7 +630,7 @@ async function continueExistingChat(){
   const pin=String($('continueChatPin')?.value||'').replace(/\D/g,'').slice(0,4);
   const status=$('continueChatStatus');
   if(!/^\d{4}$/.test(code)){if(status)status.textContent='Enter the 4-digit chat code.';return;}
-  if(pin.length!==4){if(status)status.textContent='Enter your 4-digit device PIN.';return;}
+  if(pin.length!==4){if(status)status.textContent='Enter your 4-digit account PIN.';return;}
   if(status)status.textContent='Opening chat…';
   try{
     const r=await fetch('/api/continue-chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code,pin})});
@@ -640,7 +640,7 @@ async function continueExistingChat(){
     localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);rememberRoom(currentRoom);
     if(status)status.textContent='Connected ✓';
     await openChat(true);
-  }catch{if(status)status.textContent='Could not connect. Try again.';}
+  }catch{if(status)status.textContent='Could not sign in. Check your details and try again.';}
 }
 $('continueChatBtn')?.addEventListener('click',continueExistingChat);
 $('continueChatPin')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();continueExistingChat();}});
@@ -915,7 +915,25 @@ $('voiceBtn').onclick=async()=>{if(!navigator.mediaDevices?.getUserMedia||!windo
 function stopRecording(){if(recorder&&recorder.state!=='inactive')recorder.stop();clearInterval(recordTimer);$('recordingBar').classList.add('hidden');$('form').classList.remove('recording');setCurrentChatActivity('active');}
 $('cancelRecord').onclick=()=>{stopRecording();recordedChunks=[];};$('sendRecord').onclick=async()=>{if(!recorder)return;const type=recorder.mimeType||'audio/webm';stopRecording();await new Promise(r=>setTimeout(r,80));const blob=new Blob(recordedChunks,{type});recordedChunks=[];if(blob.size)await uploadMedia('audio',blob);};
 
-async function uploadAvatarFrom(inputId){const file=$(inputId).files[0];if(!file)return null;const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/upload/avatar`,{method:'POST',headers:{'x-chat-token':authToken,'content-type':file.type},body:file});const data=await r.json();if(!r.ok){alert(data.error||'Could not upload photo.');return null;}profiles[myRole]=data;refreshHeader();$(inputId).value='';return data;}
+async function uploadAvatarFrom(inputId){
+  const input=$(inputId),file=input?.files?.[0];if(!file)return null;
+  try{
+    let r,data;
+    if(currentRoom&&authToken&&myRole){
+      r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/upload/avatar`,{method:'POST',headers:{'x-chat-token':authToken,'content-type':file.type},body:file});data=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(data.error||'Could not upload photo.');
+      profiles[myRole]=data;refreshHeader();
+    }else{
+      if(!(await ensurePeopleAccount()))throw new Error('Save your bloop account before adding a photo.');
+      r=await fetch('/api/people/avatar',{method:'POST',headers:{...peopleHeaders(),'content-type':file.type},body:file});data=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(data.error||'Could not upload photo.');
+      localStorage.setItem('bloop:accountAvatar:v1',data.avatarUrl||'');
+      if($('profileAvatar')&&data.avatarUrl)$('profileAvatar').src=data.avatarUrl;
+    }
+    return data;
+  }catch(err){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent=err?.message||'Could not upload photo.';return null;}
+  finally{if(input)input.value='';}
+}
 function openProfileDialog(){
   if(currentRoom&&myRole)refreshHeader();
   applyAppearance();
@@ -923,6 +941,7 @@ function openProfileDialog(){
   if($('profileDisplayName'))$('profileDisplayName').value=identity.name||mine.displayName||'';
   if($('profileUsername'))$('profileUsername').value=identity.username||mine.username||'';
   if($('profileDevicePin'))$('profileDevicePin').value=localStorage.getItem(profileDevicePinKey)||'';
+  const accountAvatar=localStorage.getItem('bloop:accountAvatar:v1');if(!currentRoom&&accountAvatar&&$('profileAvatar'))$('profileAvatar').src=accountAvatar;
   if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='';
   if($('deletePeopleStatus'))$('deletePeopleStatus').textContent='';
   $('profileDialog').showModal();
@@ -931,7 +950,7 @@ $('profileBtn').onclick=openProfileDialog;
 $('homeEditProfileBtn')?.addEventListener('click',openProfileDialog);
 $('avatarPick').onclick=()=>$('avatarInput').click();$('avatarInput').onchange=()=>uploadAvatarFrom('avatarInput');
 async function saveDevicePinAcrossChats(pin){
-  if(!/^\d{4}$/.test(pin))throw new Error('Device PIN must be 4 digits.');
+  if(!/^\d{4}$/.test(pin))throw new Error('Account PIN must be 4 digits.');
   localStorage.setItem(profileDevicePinKey,pin);
   const rooms=getRooms();let saved=0,failed=0;
   await Promise.allSettled(rooms.map(async roomId=>{
@@ -943,7 +962,7 @@ async function saveDevicePinAcrossChats(pin){
 
 async function saveIdentityAcrossChats(name,username){
   localStorage.setItem(identityKey,JSON.stringify({name,username}));
-  if(localStorage.getItem(peopleTokenKey)){try{await fetch('/api/people/register',{method:'POST',headers:{'content-type':'application/json',...peopleHeaders()},body:JSON.stringify({displayName:name,username})});}catch{}}
+  if(localStorage.getItem(peopleTokenKey)){try{await fetch('/api/people/register',{method:'POST',headers:{'content-type':'application/json',...peopleHeaders()},body:JSON.stringify({displayName:name,username,pin:localStorage.getItem(profileDevicePinKey)||''})});}catch{}}
   const rooms=getRooms();
   await Promise.allSettled(rooms.map(async id=>{
     const token=localStorage.getItem(storageKey(id));if(!token)return;
@@ -956,16 +975,22 @@ $('saveProfile').onclick=async()=>{
   const username=$('profileUsername')?.value.trim().replace(/^@+/,'').replace(/[^a-zA-Z0-9_.]/g,'').slice(0,20)||'';
   const rawPin=String($('profileDevicePin')?.value||'').replace(/\D/g,'').slice(0,4);
   if(!name||!username){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='Add both a name and username.';return;}
-  if(rawPin&&rawPin.length!==4){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='Device PIN must be exactly 4 digits.';return;}
+  if(rawPin.length!==4){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='Account PIN must be exactly 4 digits.';return;}
   const btn=$('saveProfile');btn.disabled=true;btn.textContent='Saving…';
   try{
+    localStorage.setItem(profileDevicePinKey,rawPin);
+    localStorage.setItem(identityKey,JSON.stringify({name,username}));
+    const accountRes=await fetch('/api/people/register',{method:'POST',headers:{'content-type':'application/json',...peopleHeaders()},body:JSON.stringify({displayName:name,username,pin:rawPin})});
+    const accountData=await accountRes.json().catch(()=>({}));
+    if(!accountRes.ok)throw new Error(accountData.error||'Could not save your bloop account.');
+    if(accountData.peopleToken)localStorage.setItem(peopleTokenKey,accountData.peopleToken);
     await saveIdentityAcrossChats(name,username);
-    let pinResult=null;if(rawPin)pinResult=await saveDevicePinAcrossChats(rawPin);
-    const bits=['Profile saved ✓'];
-    if(rawPin){if(pinResult?.saved)bits.push(`PIN saved to ${pinResult.saved} chat${pinResult.saved===1?'':'s'}`);else bits.push('PIN saved for future chats');if(pinResult?.failed)bits.push(`${pinResult.failed} chat${pinResult.failed===1?'':'s'} could not update`);}
-    if($('profileIdentityStatus'))$('profileIdentityStatus').textContent=bits.join(' · ');
-    setTimeout(()=>$('profileDialog').close(),650);
-  }catch(err){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent=err?.message||'Could not save profile.';}finally{btn.disabled=false;btn.textContent='Save';}
+    const pinResult=await saveDevicePinAcrossChats(rawPin);
+    if(currentRoom&&authToken)await linkCurrentRoomToAccount();
+    if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='bloop account saved ✓';
+    await loadPeopleDashboard().catch(()=>{});
+    setTimeout(()=>$('profileDialog').close(),500);
+  }catch(err){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent=err?.message||'Could not save your bloop account.';}finally{btn.disabled=false;btn.textContent='Save';}
 };
 async function applySavedProfilePinToCurrentChat(){
   const pin=localStorage.getItem(profileDevicePinKey);if(!pin||!/^\d{4}$/.test(pin)||!currentRoom||!authToken)return;
@@ -988,26 +1013,28 @@ $('saveIdentity').onclick=async()=>{
 
 async function deletePeopleAccount(){
   const status=$('deletePeopleStatus'),token=localStorage.getItem(peopleTokenKey);
-  if(!token){if(status)status.textContent='No People account is connected on this device.';return;}
-  if(!confirm('Delete your People account? Your chats and messages will stay, but friend requests and friendships will be removed.'))return;
-  if(status)status.textContent='Deleting People account…';
-  try{const r=await fetch('/api/people/me',{method:'DELETE',headers:{'x-people-token':token}}),d=await r.json().catch(()=>({}));if(!r.ok){if(status)status.textContent=d.error||'Could not delete People account.';return;}localStorage.removeItem(peopleTokenKey);if(status)status.textContent='People account deleted ✓';}catch{if(status)status.textContent='Could not delete People account.';}
+  if(!token){if(status)status.textContent='No bloop account is connected on this device.';return;}
+  if(!confirm('Delete your bloop account? Your chats and messages will stay, but friend requests and friendships will be removed.'))return;
+  if(status)status.textContent='Deleting bloop account…';
+  try{const r=await fetch('/api/people/me',{method:'DELETE',headers:{'x-people-token':token}}),d=await r.json().catch(()=>({}));if(!r.ok){if(status)status.textContent=d.error||'Could not delete bloop account.';return;}localStorage.removeItem(peopleTokenKey);if(status)status.textContent='bloop account deleted ✓';}catch{if(status)status.textContent='Could not delete bloop account.';}
 }
 $('deletePeopleAccountBtn')?.addEventListener('click',deletePeopleAccount);
 
 function peopleHeaders(){const t=localStorage.getItem(peopleTokenKey);return t?{'x-people-token':t}:{};}
 async function ensurePeopleAccount(){
-  const identity=getIdentity(),status=$('peopleStatus');
-  if(!identity?.name||!identity?.username){if(status)status.textContent='Set your Name + Username in Profile first.';return false;}
-  const r=await fetch('/api/people/register',{method:'POST',headers:{'content-type':'application/json',...peopleHeaders()},body:JSON.stringify({displayName:identity.name,username:identity.username})});
+  const identity=getIdentity(),status=$('peopleStatus'),pin=localStorage.getItem(profileDevicePinKey)||'';
+  if(!identity?.name||!identity?.username||!/^\d{4}$/.test(pin)){if(status)status.textContent='Set your name, username and 4-digit account PIN in Edit profile first.';return false;}
+  const r=await fetch('/api/people/register',{method:'POST',headers:{'content-type':'application/json',...peopleHeaders()},body:JSON.stringify({displayName:identity.name,username:identity.username,pin})});
   const d=await r.json().catch(()=>({}));
-  if(!r.ok){if(status)status.textContent=d.error||'Could not set up People.';return false;}
+  if(!r.ok){if(status)status.textContent=d.error||'Could not set up your bloop account.';return false;}
   if(d.peopleToken)localStorage.setItem(peopleTokenKey,d.peopleToken);
+  if(status)status.textContent='';
   return true;
 }
 function personRow(p,actions=''){
   const initial=escapeHtml((p.displayName||p.username||'?').trim().charAt(0).toUpperCase()||'?');
-  return `<div class="personRow"><div class="personAvatar">${initial}</div><div class="personInfo"><strong>${escapeHtml(p.displayName||p.username)}</strong><span>@${escapeHtml(p.username)}</span></div><div class="personActions">${actions}</div></div>`;
+  const avatar=p.avatarUrl?`<img src="${escapeHtml(p.avatarUrl)}" alt="">`:initial;
+  return `<div class="personRow"><div class="personAvatar">${avatar}</div><div class="personInfo"><strong>${escapeHtml(p.displayName||p.username)}</strong><span>@${escapeHtml(p.username)}</span></div><div class="personActions">${actions}</div></div>`;
 }
 function directoryActions(p){
   const message=`<button class="primary smallPeopleBtn" data-message-person="${p.id}">Message</button>`;
@@ -1021,7 +1048,7 @@ async function loadPeopleDirectory(q=''){
   const target=$('peopleDirectoryList');if(target)target.innerHTML='<div class="peopleEmpty">Loading people…</div>';
   const r=await fetch(`/api/people/discover${q?`?q=${encodeURIComponent(q)}`:''}`,{headers:peopleHeaders(),cache:'no-store'});
   const d=await r.json().catch(()=>({}));
-  if(!r.ok){if(target)target.innerHTML='<div class="peopleEmpty">Could not load people.</div>';return;}
+  if(!r.ok){if(target)target.innerHTML=`<div class="peopleEmpty">${escapeHtml(d.error||'Could not load bloop accounts.')}</div>`;return;}
   const rows=d.people||[];
   if(target)target.innerHTML=rows.length?rows.map(p=>personRow(p,directoryActions(p))).join(''):'<div class="peopleEmpty">Nobody else is in the bloop directory yet.</div>';
 }
@@ -1216,6 +1243,6 @@ $('identityCloseBtn')?.addEventListener('click',v38SkipIdentity);$('identityLate
 async function v38AccountSignIn(){
  const name=$('accountSignInName')?.value.trim()||'',username=$('accountSignInUsername')?.value.trim().replace(/^@+/,'')||'',pin=String($('accountSignInPin')?.value||'').replace(/\D/g,'').slice(0,4),status=$('accountSignInStatus');
  if(!name||username.length<3||pin.length!==4){if(status)status.textContent='Enter your name, username and 4-digit PIN.';return;}
- try{const res=await fetch('/api/people/sign-in',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({displayName:name,username,pin})});const data=await res.json().catch(()=>({}));if(!res.ok){if(status)status.textContent=data.error||'Could not sign in.';return;}localStorage.setItem(peopleTokenKey,data.peopleToken);localStorage.setItem(identityKey,JSON.stringify({name:data.profile.displayName,username:data.profile.username}));localStorage.setItem(profileDevicePinKey,pin);const rooms=getRooms();for(const chat of data.chats||[]){localStorage.setItem(storageKey(chat.roomId),chat.authToken);localStorage.setItem(roleKey(chat.roomId),chat.role);if(!rooms.includes(chat.roomId))rooms.unshift(chat.roomId);}localStorage.setItem(roomsKey,JSON.stringify(rooms.slice(0,30)));if(status)status.textContent=`Signed in ✓ ${data.chats?.length||0} saved chat${data.chats?.length===1?'':'s'} loaded.`;await setupContacts({notify:false});}catch{if(status)status.textContent='Could not connect. Try again.';}
+ try{const res=await fetch('/api/people/sign-in',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({displayName:name,username,pin})});const data=await res.json().catch(()=>({}));if(!res.ok){if(status)status.textContent=data.error||'Could not sign in.';return;}localStorage.setItem(peopleTokenKey,data.peopleToken);localStorage.setItem(identityKey,JSON.stringify({name:data.profile.displayName,username:data.profile.username}));localStorage.setItem(profileDevicePinKey,pin);const rooms=getRooms();for(const chat of data.chats||[]){localStorage.setItem(storageKey(chat.roomId),chat.authToken);localStorage.setItem(roleKey(chat.roomId),chat.role);if(!rooms.includes(chat.roomId))rooms.unshift(chat.roomId);}localStorage.setItem(roomsKey,JSON.stringify(rooms.slice(0,30)));if(status)status.textContent=`Signed in ✓ ${data.chats?.length||0} saved chat${data.chats?.length===1?'':'s'} loaded.`;await setupContacts({notify:false});}catch{if(status)status.textContent='Could not sign in. Check your details and try again.';}
 }
 $('accountSignInPin')?.addEventListener('input',e=>e.target.value=String(e.target.value||'').replace(/\D/g,'').slice(0,4));$('accountSignInBtn')?.addEventListener('click',v38AccountSignIn);
