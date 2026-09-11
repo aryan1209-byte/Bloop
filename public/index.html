@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/assets/bloop-icon.jpg">
 </head>
 <body>
-<div class="bloopVersion">Bloop v35</div>
+<div class="bloopVersion">Bloop v36</div>
   <div class="pageWaterBg" aria-hidden="true"></div>
   <div class="bloopBrandBadge" aria-label="Bloop"><img src="/assets/bloop-icon.jpg" alt=""><span>bloop</span></div>
   <div id="appChrome" class="appChrome" aria-hidden="false">
@@ -56,6 +56,7 @@
         </div>
       </div>
       <p class="homeLead">Your private corner for messages, photos, voice notes and much more!</p>
+      <div class="homeProfileRow"><button id="homeEditProfileBtn" class="secondary homeProfileBtn" type="button"><span class="homeProfileIcon">☺</span><span><strong>Edit profile</strong><small>Name, username & device PIN</small></span></button></div>
 <div class="homeTabs"><button id="homeChatsTab" class="homeTab active" type="button">Chats</button><button id="homePeopleTab" class="homeTab" type="button">People</button></div>
 <section id="peoplePanel" class="peoplePanel hidden">
         <section class="homeWidget peopleDirectoryWidget">
@@ -218,7 +219,7 @@
         <label>Name<input id="profileDisplayName" maxlength="24" placeholder="Name" autocomplete="name"></label>
         <label>Username<div class="usernameInput"><span>@</span><input id="profileUsername" maxlength="20" placeholder="username" autocapitalize="none" autocomplete="off"></div></label>
         <label>Device PIN<input id="profileDevicePin" inputmode="numeric" maxlength="4" placeholder="4 digits" autocomplete="off"></label>
-        <small class="muted profilePinHint">Use this with the short chat code to continue this chat on another device.</small>
+        <small class="muted profilePinHint">Saved across your Bloop chats on this profile. Use it with a chat’s 4-digit code on another device.</small>
         <small id="profileIdentityStatus" class="muted"></small>
       </div>
       <div class="dialogSection"><span class="dialogLabel">Theme</span><div id="dialogThemeGrid" class="themeGrid compact"></div></div>
@@ -226,6 +227,7 @@
       <div class="dialogSection"><label class="idleSetting">Auto-blur after inactivity<select id="dialogIdleBlurSelect" aria-label="Auto blur after inactivity"><option value="0">Off</option><option value="1">1 minute</option><option value="2">2 minutes</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option></select></label></div>
       <div class="dialogSection alertSettings"><label class="switchRow"><span>Message notifications</span><input id="dialogNotificationToggle" type="checkbox"><i></i></label><label class="switchRow"><span>Tiny message sound</span><input id="dialogSoundToggle" type="checkbox" checked><i></i></label></div>
       <div class="dialogSection"><button type="button" id="dialogBookmarkBtn" class="secondary full">Bookmark Bloop</button></div>
+      <div class="dialogSection peopleAccountSettings"><span class="dialogLabel">People account</span><p class="muted">Removes your username from People, friend requests and friendships. Your chats and messages stay.</p><button type="button" id="deletePeopleAccountBtn" class="dangerOutline full">Delete People account</button><small id="deletePeopleStatus" class="muted"></small></div>
       <button type="button" id="saveProfile" class="primary full">Save</button>
     </form>
   </dialog>

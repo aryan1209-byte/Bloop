@@ -107,6 +107,7 @@ const lastRoomKey='justtwo:lastRoom';
 const roomsKey='justtwo:rooms:v1';
 const identityKey='justtwo:identity:v1';
 const peopleTokenKey='bloop:peopleToken:v1';
+const profileDevicePinKey='bloop:profileDevicePin:v1';
 const setupKey=(id,role)=>`justtwo:${id}:${role}:setup-v3`;
 function getRooms(){try{return [...new Set(JSON.parse(localStorage.getItem(roomsKey)||'[]'))];}catch{return[];}}
 function rememberRoom(id){const rooms=getRooms().filter(Boolean);if(!rooms.includes(id))rooms.unshift(id);localStorage.setItem(roomsKey,JSON.stringify(rooms.slice(0,30)));localStorage.setItem(lastRoomKey,id);}
@@ -706,7 +707,7 @@ async function openChat(pushHistory=true){
   stopHomeRefresh();
   if(!currentRoom||!authToken)return fail('Missing chat access.');
   const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/messages`,{headers:{'x-chat-token':authToken}});const data=await r.json();if(!r.ok)return fail(data.error||'Could not open chat.');
-  myRole=data.role;profiles=data.profiles||profiles;currentContactState=data.contactState||{removed:false,removedBy:null,removedAt:null,removedByMe:false};rememberRoom(currentRoom);await syncIdentityToRoom();refreshHeader();setChatCode(data.joinCode||'');
+  myRole=data.role;profiles=data.profiles||profiles;currentContactState=data.contactState||{removed:false,removedBy:null,removedAt:null,removedByMe:false};rememberRoom(currentRoom);await syncIdentityToRoom();await applySavedProfilePinToCurrentChat();refreshHeader();setChatCode(data.joinCode||'');
   applyContactRemovalState(currentContactState);
   const box=$('messages');box.innerHTML='';data.messages.forEach(addMessage);if(!data.messages.length)box.innerHTML='<div class="empty"><b>It’s quiet in here.</b><span>One of you has to start 😭</span></div>';
   show('chat');connectSocket();scrollBottom();
@@ -914,16 +915,31 @@ function stopRecording(){if(recorder&&recorder.state!=='inactive')recorder.stop(
 $('cancelRecord').onclick=()=>{stopRecording();recordedChunks=[];};$('sendRecord').onclick=async()=>{if(!recorder)return;const type=recorder.mimeType||'audio/webm';stopRecording();await new Promise(r=>setTimeout(r,80));const blob=new Blob(recordedChunks,{type});recordedChunks=[];if(blob.size)await uploadMedia('audio',blob);};
 
 async function uploadAvatarFrom(inputId){const file=$(inputId).files[0];if(!file)return null;const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/upload/avatar`,{method:'POST',headers:{'x-chat-token':authToken,'content-type':file.type},body:file});const data=await r.json();if(!r.ok){alert(data.error||'Could not upload photo.');return null;}profiles[myRole]=data;refreshHeader();$(inputId).value='';return data;}
-$('profileBtn').onclick=()=>{
-  refreshHeader();applyAppearance();
-  const identity=getIdentity()||{};const mine=profiles[myRole]||{};
+function openProfileDialog(){
+  if(currentRoom&&myRole)refreshHeader();
+  applyAppearance();
+  const identity=getIdentity()||{},mine=(currentRoom&&myRole?profiles[myRole]:{})||{};
   if($('profileDisplayName'))$('profileDisplayName').value=identity.name||mine.displayName||'';
   if($('profileUsername'))$('profileUsername').value=identity.username||mine.username||'';
-  if($('profileDevicePin'))$('profileDevicePin').value='';
+  if($('profileDevicePin'))$('profileDevicePin').value=localStorage.getItem(profileDevicePinKey)||'';
   if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='';
+  if($('deletePeopleStatus'))$('deletePeopleStatus').textContent='';
   $('profileDialog').showModal();
-};
+}
+$('profileBtn').onclick=openProfileDialog;
+$('homeEditProfileBtn')?.addEventListener('click',openProfileDialog);
 $('avatarPick').onclick=()=>$('avatarInput').click();$('avatarInput').onchange=()=>uploadAvatarFrom('avatarInput');
+async function saveDevicePinAcrossChats(pin){
+  if(!/^\d{4}$/.test(pin))throw new Error('Device PIN must be 4 digits.');
+  localStorage.setItem(profileDevicePinKey,pin);
+  const rooms=getRooms();let saved=0,failed=0;
+  await Promise.allSettled(rooms.map(async roomId=>{
+    const token=localStorage.getItem(storageKey(roomId));if(!token)return;
+    try{const r=await fetch(`/api/rooms/${encodeURIComponent(roomId)}/device-pin`,{method:'POST',headers:{'content-type':'application/json','x-chat-token':token},body:JSON.stringify({pin})});if(r.ok)saved++;else failed++;}catch{failed++;}
+  }));
+  return {saved,failed};
+}
+
 async function saveIdentityAcrossChats(name,username){
   localStorage.setItem(identityKey,JSON.stringify({name,username}));
   if(localStorage.getItem(peopleTokenKey)){try{await fetch('/api/people/register',{method:'POST',headers:{'content-type':'application/json',...peopleHeaders()},body:JSON.stringify({displayName:name,username})});}catch{}}
@@ -937,21 +953,23 @@ async function saveIdentityAcrossChats(name,username){
 $('saveProfile').onclick=async()=>{
   const name=$('profileDisplayName')?.value.trim().slice(0,24)||'';
   const username=$('profileUsername')?.value.trim().replace(/^@+/,'').replace(/[^a-zA-Z0-9_.]/g,'').slice(0,20)||'';
-  const devicePin=String($('profileDevicePin')?.value||'').replace(/\D/g,'').slice(0,4);
+  const rawPin=String($('profileDevicePin')?.value||'').replace(/\D/g,'').slice(0,4);
   if(!name||!username){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='Add both a name and username.';return;}
+  if(rawPin&&rawPin.length!==4){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='Device PIN must be exactly 4 digits.';return;}
   const btn=$('saveProfile');btn.disabled=true;btn.textContent='Saving…';
   try{
     await saveIdentityAcrossChats(name,username);
-    if(devicePin){
-      if(devicePin.length!==4){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='Device PIN must be 4 digits.';return;}
-      const pr=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/device-pin`,{method:'POST',headers:{'content-type':'application/json','x-chat-token':authToken},body:JSON.stringify({pin:devicePin})});
-      const pd=await pr.json().catch(()=>({}));
-      if(!pr.ok){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent=pd.error||'Could not save device PIN.';return;}
-    }
-    if($('profileIdentityStatus'))$('profileIdentityStatus').textContent=devicePin?'Profile + device PIN saved ✓':'Saved ✓';
-    setTimeout(()=>$('profileDialog').close(),280);
-  } finally{btn.disabled=false;btn.textContent='Save';}
+    let pinResult=null;if(rawPin)pinResult=await saveDevicePinAcrossChats(rawPin);
+    const bits=['Profile saved ✓'];
+    if(rawPin){if(pinResult?.saved)bits.push(`PIN saved to ${pinResult.saved} chat${pinResult.saved===1?'':'s'}`);else bits.push('PIN saved for future chats');if(pinResult?.failed)bits.push(`${pinResult.failed} chat${pinResult.failed===1?'':'s'} could not update`);}
+    if($('profileIdentityStatus'))$('profileIdentityStatus').textContent=bits.join(' · ');
+    setTimeout(()=>$('profileDialog').close(),650);
+  }catch(err){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent=err?.message||'Could not save profile.';}finally{btn.disabled=false;btn.textContent='Save';}
 };
+async function applySavedProfilePinToCurrentChat(){
+  const pin=localStorage.getItem(profileDevicePinKey);if(!pin||!/^\d{4}$/.test(pin)||!currentRoom||!authToken)return;
+  try{await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/device-pin`,{method:'POST',headers:{'content-type':'application/json','x-chat-token':authToken},body:JSON.stringify({pin})});}catch{}
+}
 async function syncIdentityToRoom(){
   const identity=getIdentity();if(!identity||!currentRoom||!authToken)return true;
   const mine=profiles[myRole]||{};if(mine.displayName===identity.name&&mine.username===identity.username)return true;
@@ -966,6 +984,15 @@ $('saveIdentity').onclick=async()=>{
   if(!name||!username){$('identityError').textContent='Add both a name and username.';return;}
   localStorage.setItem(identityKey,JSON.stringify({name,username}));$('identityDialog').close();if(currentRoom&&authToken){await syncIdentityToRoom();refreshHeader();}
 };
+
+async function deletePeopleAccount(){
+  const status=$('deletePeopleStatus'),token=localStorage.getItem(peopleTokenKey);
+  if(!token){if(status)status.textContent='No People account is connected on this device.';return;}
+  if(!confirm('Delete your People account? Your chats and messages will stay, but friend requests and friendships will be removed.'))return;
+  if(status)status.textContent='Deleting People account…';
+  try{const r=await fetch('/api/people/me',{method:'DELETE',headers:{'x-people-token':token}}),d=await r.json().catch(()=>({}));if(!r.ok){if(status)status.textContent=d.error||'Could not delete People account.';return;}localStorage.removeItem(peopleTokenKey);if(status)status.textContent='People account deleted ✓';}catch{if(status)status.textContent='Could not delete People account.';}
+}
+$('deletePeopleAccountBtn')?.addEventListener('click',deletePeopleAccount);
 
 function peopleHeaders(){const t=localStorage.getItem(peopleTokenKey);return t?{'x-people-token':t}:{};}
 async function ensurePeopleAccount(){

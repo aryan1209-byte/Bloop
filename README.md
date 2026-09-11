@@ -63,3 +63,9 @@ test
 - Incoming message notifications use playful Bloop titles.
 - Emergency button is visibly red inside chats.
 - Uses a 3x upscaled/sharpened copy of the existing water background asset for improved large-screen rendering.
+
+## v36 Profile + People account
+- Adds Edit profile directly on Home.
+- Device PIN is profile-level: save once and Bloop applies it to every saved chat and future opened/joined chats.
+- Adds Delete People account while preserving normal chats/messages.
+- Adds directory opt-out so deleted People accounts do not immediately reappear from profile backfill.

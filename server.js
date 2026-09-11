@@ -116,6 +116,10 @@ CREATE TABLE IF NOT EXISTS people (id TEXT PRIMARY KEY,username TEXT NOT NULL CO
 CREATE TABLE IF NOT EXISTS friend_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,sender_id TEXT NOT NULL,receiver_id TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','declined')),created_at INTEGER NOT NULL,responded_at INTEGER,UNIQUE(sender_id,receiver_id),FOREIGN KEY(sender_id) REFERENCES people(id) ON DELETE CASCADE,FOREIGN KEY(receiver_id) REFERENCES people(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS friendships (person_a TEXT NOT NULL,person_b TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(person_a,person_b),FOREIGN KEY(person_a) REFERENCES people(id) ON DELETE CASCADE,FOREIGN KEY(person_b) REFERENCES people(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS people_chats (person_a TEXT NOT NULL,person_b TEXT NOT NULL,room_id TEXT NOT NULL UNIQUE,created_at INTEGER NOT NULL,PRIMARY KEY(person_a,person_b),FOREIGN KEY(person_a) REFERENCES people(id) ON DELETE CASCADE,FOREIGN KEY(person_b) REFERENCES people(id) ON DELETE CASCADE,FOREIGN KEY(room_id) REFERENCES rooms(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS people_directory_opt_out (
+  username TEXT PRIMARY KEY COLLATE NOCASE,
+  opted_out_at INTEGER NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_people_username ON people(username);CREATE INDEX IF NOT EXISTS idx_friend_requests_receiver ON friend_requests(receiver_id,status);
 
 CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id, id);
@@ -237,6 +241,7 @@ function backfillPeopleDirectory(){
   for(const row of rows){
     const username=cleanUsername(row.username).toLowerCase();
     if(username.length<3) continue;
+    if(db.prepare('SELECT 1 FROM people_directory_opt_out WHERE username=? COLLATE NOCASE').get(username)) continue;
     if(db.prepare('SELECT 1 FROM people WHERE username=? COLLATE NOCASE').get(username)) continue;
     const id=token(12);
     db.prepare('INSERT OR IGNORE INTO people(id,username,display_name,owner_token_hash,created_at,updated_at) VALUES(?,?,?,?,?,?)')
@@ -388,6 +393,7 @@ app.use((req, res, next) => {
 app.post('/api/people/register',(req,res)=>{
   const displayName=cleanName(req.body?.displayName),username=cleanUsername(req.body?.username).toLowerCase();
   if(!displayName||username.length<3)return res.status(400).json({error:'Use a name and a username with at least 3 characters.'});
+  db.prepare('DELETE FROM people_directory_opt_out WHERE username=? COLLATE NOCASE').run(username);
   const existing=peopleAuth(req);
   if(existing){
     const taken=db.prepare('SELECT id FROM people WHERE username=? COLLATE NOCASE AND id!=?').get(username,existing.id);
@@ -408,6 +414,17 @@ app.post('/api/people/register',(req,res)=>{
     .run(id,username,displayName,sha256(peopleToken),now,now);
   res.json({peopleToken,profile:publicPerson(id)});
 });
+app.delete('/api/people/me',(req,res)=>{
+  const me=peopleAuth(req);
+  if(!me)return res.status(401).json({error:'Not signed into People.'});
+  const tx=db.transaction(()=>{
+    db.prepare('INSERT OR REPLACE INTO people_directory_opt_out(username,opted_out_at) VALUES(?,?)').run(me.username,Date.now());
+    db.prepare('DELETE FROM people WHERE id=?').run(me.id);
+  });
+  tx();
+  res.json({ok:true});
+});
+
 app.get('/api/people/me',(req,res)=>{const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Set up your Bloop username first.'});const friends=db.prepare(`SELECT p.id,p.username,p.display_name AS displayName FROM friendships f JOIN people p ON p.id=CASE WHEN f.person_a=? THEN f.person_b ELSE f.person_a END WHERE f.person_a=? OR f.person_b=? ORDER BY p.display_name COLLATE NOCASE`).all(me.id,me.id,me.id);const incoming=db.prepare(`SELECT fr.id,p.id AS personId,p.username,p.display_name AS displayName FROM friend_requests fr JOIN people p ON p.id=fr.sender_id WHERE fr.receiver_id=? AND fr.status='pending' ORDER BY fr.created_at DESC`).all(me.id);const outgoing=db.prepare(`SELECT fr.id,p.id AS personId,p.username,p.display_name AS displayName FROM friend_requests fr JOIN people p ON p.id=fr.receiver_id WHERE fr.sender_id=? AND fr.status='pending' ORDER BY fr.created_at DESC`).all(me.id);res.json({profile:publicPerson(me.id),friends,incoming,outgoing});});
 app.get('/api/people/discover',(req,res)=>{
   backfillPeopleDirectory();

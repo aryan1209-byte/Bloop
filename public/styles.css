@@ -843,3 +843,5 @@ body{padding-top:0!important}
   .customQuickCode input{width:100%!important}
   .deviceTransferCode{font-size:21px}
 }
+\n/* v36 profile + People account cleanup */
+.homeProfileRow{display:flex;justify-content:flex-start;margin:10px 0 2px}.homeProfileBtn{display:flex!important;align-items:center!important;gap:10px!important;text-align:left!important;padding:9px 12px!important;border-radius:15px!important;min-height:52px!important}.homeProfileBtn>span:last-child{display:flex;flex-direction:column;gap:1px}.homeProfileBtn strong{font-size:12px}.homeProfileBtn small{font-size:9px;color:var(--muted);font-weight:650}.homeProfileIcon{width:31px;height:31px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.07);border:1px solid var(--line);font-size:16px}.peopleAccountSettings{border-top:1px solid var(--line);padding-top:14px!important}.peopleAccountSettings .dangerOutline{border-color:rgba(255,88,103,.45)!important;color:#ffb5bd!important;background:rgba(255,73,94,.08)!important}@media(max-width:650px){.homeProfileRow{margin-top:7px}.homeProfileBtn{width:100%;justify-content:flex-start!important}}
