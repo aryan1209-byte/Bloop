@@ -112,10 +112,28 @@ CREATE INDEX IF NOT EXISTS idx_room_access_tokens_room ON room_access_tokens(roo
 CREATE INDEX IF NOT EXISTS idx_device_transfer_codes_expiry ON device_transfer_codes(expires_at);
 
 
-CREATE TABLE IF NOT EXISTS people (id TEXT PRIMARY KEY,username TEXT NOT NULL COLLATE NOCASE UNIQUE,display_name TEXT NOT NULL,owner_token_hash TEXT NOT NULL UNIQUE,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS people (id TEXT PRIMARY KEY,username TEXT NOT NULL COLLATE NOCASE UNIQUE,display_name TEXT NOT NULL,owner_token_hash TEXT NOT NULL UNIQUE,pin_hash TEXT,avatar_url TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS friend_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,sender_id TEXT NOT NULL,receiver_id TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','declined')),created_at INTEGER NOT NULL,responded_at INTEGER,UNIQUE(sender_id,receiver_id),FOREIGN KEY(sender_id) REFERENCES people(id) ON DELETE CASCADE,FOREIGN KEY(receiver_id) REFERENCES people(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS friendships (person_a TEXT NOT NULL,person_b TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(person_a,person_b),FOREIGN KEY(person_a) REFERENCES people(id) ON DELETE CASCADE,FOREIGN KEY(person_b) REFERENCES people(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS people_chats (person_a TEXT NOT NULL,person_b TEXT NOT NULL,room_id TEXT NOT NULL UNIQUE,created_at INTEGER NOT NULL,PRIMARY KEY(person_a,person_b),FOREIGN KEY(person_a) REFERENCES people(id) ON DELETE CASCADE,FOREIGN KEY(person_b) REFERENCES people(id) ON DELETE CASCADE,FOREIGN KEY(room_id) REFERENCES rooms(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS people_sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  person_id TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at INTEGER NOT NULL,
+  last_used_at INTEGER,
+  FOREIGN KEY(person_id) REFERENCES people(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS people_room_members (
+  person_id TEXT NOT NULL,
+  room_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK(role IN ('creator','guest')),
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY(person_id,room_id),
+  FOREIGN KEY(person_id) REFERENCES people(id) ON DELETE CASCADE,
+  FOREIGN KEY(room_id) REFERENCES rooms(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_people_room_members_person ON people_room_members(person_id);
 CREATE TABLE IF NOT EXISTS people_directory_opt_out (
   username TEXT PRIMARY KEY COLLATE NOCASE,
   opted_out_at INTEGER NOT NULL
@@ -145,6 +163,10 @@ if (!roomColumns.includes('quick_code')) db.exec(`ALTER TABLE rooms ADD COLUMN q
 if (!roomColumns.includes('invite_status_at')) db.exec(`ALTER TABLE rooms ADD COLUMN invite_status_at INTEGER`);
 if (!roomColumns.includes('contact_removed_by')) db.exec(`ALTER TABLE rooms ADD COLUMN contact_removed_by TEXT`);
 if (!roomColumns.includes('contact_removed_at')) db.exec(`ALTER TABLE rooms ADD COLUMN contact_removed_at INTEGER`);
+
+const peopleColumns = db.prepare('PRAGMA table_info(people)').all().map(c => c.name);
+if (!peopleColumns.includes('pin_hash')) db.exec(`ALTER TABLE people ADD COLUMN pin_hash TEXT`);
+if (!peopleColumns.includes('avatar_url')) db.exec(`ALTER TABLE people ADD COLUMN avatar_url TEXT`);
 
 const profileColumns = db.prepare('PRAGMA table_info(profiles)').all().map(c => c.name);
 if (!profileColumns.includes('last_seen')) db.exec(`ALTER TABLE profiles ADD COLUMN last_seen INTEGER`);
@@ -228,10 +250,21 @@ function authenticate(roomId, authToken) {
 function authRequest(req) {
   return authenticate(req.params.roomId, req.header('x-chat-token'));
 }
-function peopleAuth(req){const raw=req.header('x-people-token');if(!raw)return null;return db.prepare('SELECT id,username,display_name AS displayName FROM people WHERE owner_token_hash=?').get(sha256(raw))||null;}
+function peopleAuth(req){
+  const raw=req.header('x-people-token');if(!raw)return null;const hash=sha256(raw);
+  let person=db.prepare('SELECT id,username,display_name AS displayName,avatar_url AS avatarUrl FROM people WHERE owner_token_hash=?').get(hash)||null;
+  if(person)return person;
+  person=db.prepare(`SELECT p.id,p.username,p.display_name AS displayName,p.avatar_url AS avatarUrl FROM people_sessions s JOIN people p ON p.id=s.person_id WHERE s.token_hash=?`).get(hash)||null;
+  if(person)db.prepare('UPDATE people_sessions SET last_used_at=? WHERE token_hash=?').run(Date.now(),hash);
+  return person;
+}
+function issuePeopleSession(personId){const raw=token(32);db.prepare('INSERT INTO people_sessions(person_id,token_hash,created_at,last_used_at) VALUES(?,?,?,?)').run(personId,sha256(raw),Date.now(),Date.now());return raw;}
+const peopleLoginAttempts=new Map();
+function peopleLoginAllowed(key){const now=Date.now(),windowMs=10*60*1000,max=6;const row=peopleLoginAttempts.get(key)||{start:now,count:0};if(now-row.start>windowMs){row.start=now;row.count=0;}row.count++;peopleLoginAttempts.set(key,row);return row.count<=max;}
+function clearPeopleLoginAttempts(key){peopleLoginAttempts.delete(key);}
 function friendshipPair(a,b){return a<b?[a,b]:[b,a];}
 function areFriends(a,b){const [x,y]=friendshipPair(a,b);return Boolean(db.prepare('SELECT 1 FROM friendships WHERE person_a=? AND person_b=?').get(x,y));}
-function publicPerson(id){return db.prepare('SELECT id,username,display_name AS displayName FROM people WHERE id=?').get(id)||null;}
+function publicPerson(id){return db.prepare('SELECT id,username,display_name AS displayName,avatar_url AS avatarUrl FROM people WHERE id=?').get(id)||null;}
 function backfillPeopleDirectory(){
   const rows=db.prepare(`SELECT username, MAX(display_name) AS displayName
                          FROM profiles
@@ -391,29 +424,42 @@ app.use((req, res, next) => {
 
 
 app.post('/api/people/register',(req,res)=>{
-  const displayName=cleanName(req.body?.displayName),username=cleanUsername(req.body?.username).toLowerCase();
+  const displayName=cleanName(req.body?.displayName),username=cleanUsername(req.body?.username).toLowerCase(),pin=String(req.body?.pin||'').trim();
   if(!displayName||username.length<3)return res.status(400).json({error:'Use a name and a username with at least 3 characters.'});
+  if(!/^\d{4}$/.test(pin))return res.status(400).json({error:'Set a 4-digit account PIN.'});
   db.prepare('DELETE FROM people_directory_opt_out WHERE username=? COLLATE NOCASE').run(username);
   const existing=peopleAuth(req);
-  if(existing){
-    const taken=db.prepare('SELECT id FROM people WHERE username=? COLLATE NOCASE AND id!=?').get(username,existing.id);
-    if(taken)return res.status(409).json({error:'That username is already taken.'});
-    db.prepare('UPDATE people SET username=?,display_name=?,updated_at=? WHERE id=?').run(username,displayName,Date.now(),existing.id);
-    return res.json({profile:publicPerson(existing.id)});
-  }
-  const same=db.prepare('SELECT id,owner_token_hash AS ownerHash FROM people WHERE username=? COLLATE NOCASE').get(username);
-  const peopleToken=token(32),now=Date.now();
-  if(same){
-    if(!String(same.ownerHash||'').startsWith('legacy:'))return res.status(409).json({error:'That username is already taken.'});
-    db.prepare('UPDATE people SET display_name=?,owner_token_hash=?,updated_at=? WHERE id=?')
-      .run(displayName,sha256(peopleToken),now,same.id);
-    return res.json({peopleToken,profile:publicPerson(same.id)});
-  }
-  const id=token(12);
-  db.prepare('INSERT INTO people(id,username,display_name,owner_token_hash,created_at,updated_at) VALUES(?,?,?,?,?,?)')
-    .run(id,username,displayName,sha256(peopleToken),now,now);
-  res.json({peopleToken,profile:publicPerson(id)});
+  if(existing){const taken=db.prepare('SELECT id FROM people WHERE username=? COLLATE NOCASE AND id!=?').get(username,existing.id);if(taken)return res.status(409).json({error:'That username is already taken.'});db.prepare('UPDATE people SET username=?,display_name=?,pin_hash=?,updated_at=? WHERE id=?').run(username,displayName,sha256(pin),Date.now(),existing.id);return res.json({profile:publicPerson(existing.id)});}
+  const same=db.prepare('SELECT id,owner_token_hash AS ownerHash FROM people WHERE username=? COLLATE NOCASE').get(username),peopleToken=token(32),now=Date.now();
+  if(same){if(!String(same.ownerHash||'').startsWith('legacy:'))return res.status(409).json({error:'That username is already taken. Use Sign in instead.'});db.prepare('UPDATE people SET display_name=?,owner_token_hash=?,pin_hash=?,updated_at=? WHERE id=?').run(displayName,sha256(peopleToken),sha256(pin),now,same.id);return res.json({peopleToken,profile:publicPerson(same.id)});}
+  const id=token(12);db.prepare('INSERT INTO people(id,username,display_name,owner_token_hash,pin_hash,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(id,username,displayName,sha256(peopleToken),sha256(pin),now,now);res.json({peopleToken,profile:publicPerson(id)});
 });
+app.post('/api/people/sign-in',(req,res)=>{
+  const username=cleanUsername(req.body?.username).toLowerCase(),displayName=cleanName(req.body?.displayName),pin=String(req.body?.pin||'').trim();
+  if(username.length<3||!displayName||!/^\d{4}$/.test(pin))return res.status(400).json({error:'Enter your name, username and 4-digit PIN.'});
+  const attemptKey=`${req.ip||'ip'}:${username}`;if(!peopleLoginAllowed(attemptKey))return res.status(429).json({error:'Too many sign-in attempts. Try again in a few minutes.'});
+  const person=db.prepare('SELECT id,username,display_name AS displayName,pin_hash AS pinHash,avatar_url AS avatarUrl FROM people WHERE username=? COLLATE NOCASE').get(username);
+  if(!person||!person.pinHash||person.pinHash!==sha256(pin)||person.displayName.trim().toLowerCase()!==displayName.trim().toLowerCase())return res.status(403).json({error:'Name, username or PIN is incorrect.'});
+  clearPeopleLoginAttempts(attemptKey);const peopleToken=issuePeopleSession(person.id);
+  const memberships=db.prepare(`SELECT m.room_id AS roomId,m.role FROM people_room_members m JOIN rooms r ON r.id=m.room_id WHERE m.person_id=? ORDER BY m.created_at DESC`).all(person.id);
+  const chats=memberships.map(m=>({roomId:m.roomId,role:m.role,authToken:issueAdditionalAccessToken(m.roomId,m.role)}));
+  res.json({peopleToken,profile:{id:person.id,username:person.username,displayName:person.displayName,avatarUrl:person.avatarUrl},chats});
+});
+app.post('/api/people/link-room',(req,res)=>{
+  const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Sign in to your Bloop account first.'});const roomId=String(req.body?.roomId||''),chatToken=req.header('x-chat-token'),auth=authenticate(roomId,chatToken);if(!auth)return res.status(401).json({error:'That chat is not available on this device.'});
+  db.prepare(`INSERT INTO people_room_members(person_id,room_id,role,created_at) VALUES(?,?,?,?) ON CONFLICT(person_id,room_id) DO UPDATE SET role=excluded.role`).run(me.id,roomId,auth.role,Date.now());
+  db.prepare('UPDATE profiles SET display_name=?,username=?,avatar_url=COALESCE(?,avatar_url) WHERE room_id=? AND role=?').run(me.displayName,me.username,me.avatarUrl||null,roomId,auth.role);res.json({ok:true});
+});
+app.post('/api/people/avatar', express.raw({type:'*/*',limit:'3mb'}),(req,res)=>{
+  const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Sign in to your Bloop account first.'});
+  const mime=String(req.header('content-type')||'').split(';')[0].toLowerCase();if(!mime.startsWith('image/')||!Buffer.isBuffer(req.body)||!req.body.length)return res.status(400).json({error:'Choose a valid image.'});
+  if(req.body.length>3*1024*1024)return res.status(413).json({error:'Profile photo must be under 3 MB.'});
+  const filename=`people-${me.id}-${token(8)}${extensionFor(mime,'avatar')}`,url=`/uploads/${filename}`;fs.writeFileSync(path.join(UPLOAD_DIR,filename),req.body);
+  const previous=db.prepare('SELECT avatar_url AS avatarUrl FROM people WHERE id=?').get(me.id)?.avatarUrl;db.prepare('UPDATE people SET avatar_url=?,updated_at=? WHERE id=?').run(url,Date.now(),me.id);if(previous&&previous!==url)deleteLocalMedia(previous);
+  const memberships=db.prepare('SELECT room_id AS roomId,role FROM people_room_members WHERE person_id=?').all(me.id);for(const m of memberships){db.prepare('UPDATE profiles SET avatar_url=? WHERE room_id=? AND role=?').run(url,m.roomId,m.role);io.to(m.roomId).emit('profile',{role:m.role,...getProfiles(m.roomId)[m.role]});}
+  res.json({avatarUrl:url});
+});
+
 app.delete('/api/people/me',(req,res)=>{
   const me=peopleAuth(req);
   if(!me)return res.status(401).json({error:'Not signed into People.'});
@@ -453,7 +499,7 @@ app.get('/api/people/discover',(req,res)=>{
 app.get('/api/people/search',(req,res)=>{const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Set up your Bloop username first.'});const q=cleanUsername(req.query.q||'').toLowerCase();if(q.length<2)return res.json({results:[]});const rows=db.prepare(`SELECT id,username,display_name AS displayName FROM people WHERE id!=? AND (username LIKE ? OR display_name LIKE ?) ORDER BY CASE WHEN username=? THEN 0 ELSE 1 END,username LIMIT 20`).all(me.id,`%${q}%`,`%${String(req.query.q||'').trim()}%`,q);res.json({results:rows.map(p=>({...p,state:areFriends(me.id,p.id)?'friends':db.prepare("SELECT 1 FROM friend_requests WHERE sender_id=? AND receiver_id=? AND status='pending'").get(me.id,p.id)?'outgoing':db.prepare("SELECT 1 FROM friend_requests WHERE sender_id=? AND receiver_id=? AND status='pending'").get(p.id,me.id)?'incoming':'none'}))});});
 app.post('/api/people/:personId/request',(req,res)=>{const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Not signed into People.'});const other=publicPerson(req.params.personId);if(!other)return res.status(404).json({error:'Person not found.'});if(other.id===me.id)return res.status(400).json({error:'That is you.'});if(areFriends(me.id,other.id))return res.json({state:'friends'});const reverse=db.prepare("SELECT id FROM friend_requests WHERE sender_id=? AND receiver_id=? AND status='pending'").get(other.id,me.id);if(reverse){db.prepare("UPDATE friend_requests SET status='accepted',responded_at=? WHERE id=?").run(Date.now(),reverse.id);const [a,b]=friendshipPair(me.id,other.id);db.prepare('INSERT OR IGNORE INTO friendships(person_a,person_b,created_at) VALUES(?,?,?)').run(a,b,Date.now());return res.json({state:'friends'});}db.prepare(`INSERT INTO friend_requests(sender_id,receiver_id,status,created_at) VALUES(?,?,'pending',?) ON CONFLICT(sender_id,receiver_id) DO UPDATE SET status='pending',created_at=excluded.created_at,responded_at=NULL`).run(me.id,other.id,Date.now());res.json({state:'outgoing'});});
 app.post('/api/people/requests/:requestId/respond',(req,res)=>{const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Not signed into People.'});const fr=db.prepare("SELECT * FROM friend_requests WHERE id=? AND receiver_id=? AND status='pending'").get(req.params.requestId,me.id);if(!fr)return res.status(404).json({error:'Request not found.'});const action=req.body?.action==='accept'?'accepted':'declined';db.prepare('UPDATE friend_requests SET status=?,responded_at=? WHERE id=?').run(action,Date.now(),fr.id);if(action==='accepted'){const [a,b]=friendshipPair(fr.sender_id,fr.receiver_id);db.prepare('INSERT OR IGNORE INTO friendships(person_a,person_b,created_at) VALUES(?,?,?)').run(a,b,Date.now());}res.json({ok:true,state:action});});
-app.post('/api/people/:personId/message',(req,res)=>{const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Not signed into People.'});const other=publicPerson(req.params.personId);if(!other)return res.status(404).json({error:'Person not found.'});const [a,b]=friendshipPair(me.id,other.id);let link=db.prepare('SELECT room_id AS roomId FROM people_chats WHERE person_a=? AND person_b=?').get(a,b),roomId=link?.roomId;if(!roomId){roomId=token(12);const now=Date.now(),joinCode=makeJoinCode(),quickCode=availableQuickCode();db.prepare(`INSERT INTO rooms(id,share_token_hash,join_code_hash,join_code,quick_code_hash,quick_code,creator_token_hash,guest_token_hash,invite_status,invite_status_at,created_at) VALUES(?,?,?,?,?,?,?,?, 'accepted', ?,?)`).run(roomId,sha256(token(24)),sha256(normalizeJoinCode(joinCode)),joinCode,quickCode?sha256(quickCode):null,quickCode,sha256(token(32)),sha256(token(32)),now,now);const creator=publicPerson(a),guest=publicPerson(b);db.prepare(`INSERT INTO profiles(room_id,role,display_name,username) VALUES(?,'creator',?,?),(?,'guest',?,?)`).run(roomId,creator.displayName,creator.username,roomId,guest.displayName,guest.username);db.prepare('INSERT INTO people_chats(person_a,person_b,room_id,created_at) VALUES(?,?,?,?)').run(a,b,roomId,now);}const role=me.id===a?'creator':'guest',authToken=issueAdditionalAccessToken(roomId,role);res.json({roomId,role,authToken});});
+app.post('/api/people/:personId/message',(req,res)=>{const me=peopleAuth(req);if(!me)return res.status(401).json({error:'Not signed into People.'});const other=publicPerson(req.params.personId);if(!other)return res.status(404).json({error:'Person not found.'});const [a,b]=friendshipPair(me.id,other.id);let link=db.prepare('SELECT room_id AS roomId FROM people_chats WHERE person_a=? AND person_b=?').get(a,b),roomId=link?.roomId;if(!roomId){roomId=token(12);const now=Date.now(),joinCode=makeJoinCode(),quickCode=availableQuickCode();db.prepare(`INSERT INTO rooms(id,share_token_hash,join_code_hash,join_code,quick_code_hash,quick_code,creator_token_hash,guest_token_hash,invite_status,invite_status_at,created_at) VALUES(?,?,?,?,?,?,?,?, 'accepted', ?,?)`).run(roomId,sha256(token(24)),sha256(normalizeJoinCode(joinCode)),joinCode,quickCode?sha256(quickCode):null,quickCode,sha256(token(32)),sha256(token(32)),now,now);const creator=publicPerson(a),guest=publicPerson(b);db.prepare(`INSERT INTO profiles(room_id,role,display_name,username) VALUES(?,'creator',?,?),(?,'guest',?,?)`).run(roomId,creator.displayName,creator.username,roomId,guest.displayName,guest.username);db.prepare('INSERT INTO people_chats(person_a,person_b,room_id,created_at) VALUES(?,?,?,?)').run(a,b,roomId,now);db.prepare('INSERT OR REPLACE INTO people_room_members(person_id,room_id,role,created_at) VALUES(?,?,?,?),(?,?,?,?)').run(a,roomId,'creator',now,b,roomId,'guest',now);}const role=me.id===a?'creator':'guest',authToken=issueAdditionalAccessToken(roomId,role);res.json({roomId,role,authToken});});
 
 app.post('/api/rooms', (_req, res) => {
   const roomId = token(12);

@@ -4,17 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0c0e13" />
-  <title>Bloop</title>
+  <title>bloop</title>
   <link rel="stylesheet" href="/styles.css" />
   <link rel="icon" type="image/jpeg" href="/assets/bloop-icon.jpg">
   <link rel="apple-touch-icon" href="/assets/bloop-icon.jpg">
 </head>
 <body>
-<div class="bloopVersion">Bloop v36</div>
+<div class="bloopVersion">bloop v37</div>
   <div class="pageWaterBg" aria-hidden="true"></div>
-  <div class="bloopBrandBadge" aria-label="Bloop"><img src="/assets/bloop-icon.jpg" alt=""><span>bloop</span></div>
+  <div class="bloopBrandBadge" aria-label="bloop"><img src="/assets/bloop-icon.jpg" alt=""><span>bloop</span></div>
   <div id="appChrome" class="appChrome" aria-hidden="false">
-    <img src="/assets/bloop-icon.jpg" class="chromeLogo" alt="Bloop">
+    <img src="/assets/bloop-icon.jpg" class="chromeLogo" alt="bloop">
     <div class="chromeStatus">
       <div id="dateClock" class="clockPill">--</div>
       <div id="batteryPill" class="batteryPill hidden" aria-label="Battery"><span class="batteryIcon"><i id="batteryFill"></i></span><span id="batteryText">--%</span></div>
@@ -37,7 +37,7 @@
   <section id="lockScreen" class="lockScreen hidden" aria-live="assertive">
     <div class="lockPanel">
       <div class="lockIcon">■</div>
-      <h1>Bloop is locked</h1>
+      <h1>bloop is locked</h1>
       <form id="unlockForm">
         <input id="unlockPassword" type="password" autocomplete="current-password" placeholder="Password" aria-label="Emergency unlock password" />
         <button class="primary full">Unlock</button>
@@ -49,53 +49,37 @@
   <main class="shell">
     <section id="landing" class="card landing">
       <div class="homeHero">
-        <div class="logo"><img src="/assets/bloop-icon.jpg" alt="Bloop"></div>
+        <div class="logo"><img src="/assets/bloop-icon.jpg" alt="bloop"></div>
         <div>
           <span class="eyebrow">HOME</span>
-          <h1>Bloop</h1>
+          <h1>bloop</h1>
         </div>
       </div>
       <p class="homeLead">Your private corner for messages, photos, voice notes and much more!</p>
-      <div class="homeProfileRow"><button id="homeEditProfileBtn" class="secondary homeProfileBtn" type="button"><span class="homeProfileIcon">☺</span><span><strong>Edit profile</strong><small>Name, username & device PIN</small></span></button></div>
+      <div class="homeProfileRow"><button id="homeEditProfileBtn" class="secondary homeProfileBtn" type="button"><span><strong>Edit profile</strong><small>Photo, name, username & account PIN</small></span></button></div>
 <div class="homeTabs"><button id="homeChatsTab" class="homeTab active" type="button">Chats</button><button id="homePeopleTab" class="homeTab" type="button">People</button></div>
 <section id="peoplePanel" class="peoplePanel hidden">
         <section class="homeWidget peopleDirectoryWidget">
           <div class="widgetHeading"><div><span class="eyebrow">PEOPLE ON BLOOP</span><h2>Everyone</h2></div><button id="refreshPeopleBtn" class="tinyBtn" type="button">Refresh</button></div>
-          <p class="muted">All Bloop usernames currently in the directory. Search still works below.</p>
+          <p class="muted">All bloop usernames currently in the directory. Search still works below.</p>
           <div id="peopleDirectoryList" class="peopleList"></div>
-        </section><section class="homeWidget"><div class="widgetHeading"><div><span class="eyebrow">FIND PEOPLE</span><h2>Search usernames</h2></div></div><p class="muted">Search by Bloop username.</p><div class="peopleSearchRow"><input id="peopleSearchInput" autocomplete="off" placeholder="@username"><button id="peopleSearchBtn" class="secondary" type="button">Search</button></div><small id="peopleStatus" class="muted"></small><div id="peopleSearchResults" class="peopleList"></div></section><section class="homeWidget"><div class="widgetHeading"><div><span class="eyebrow">REQUESTS</span><h2>Friend requests</h2></div><small id="friendRequestCount" class="muted"></small></div><div id="friendRequestsList" class="peopleList"></div></section><section class="homeWidget"><div class="widgetHeading"><div><span class="eyebrow">FRIENDS</span><h2>Your people</h2></div><small id="friendsCount" class="muted"></small></div><div id="friendsList" class="peopleList"></div></section></section>
+        </section><section class="homeWidget"><div class="widgetHeading"><div><span class="eyebrow">FIND PEOPLE</span><h2>Search usernames</h2></div></div><p class="muted">Search by bloop username.</p><div class="peopleSearchRow"><input id="peopleSearchInput" autocomplete="off" placeholder="@username"><button id="peopleSearchBtn" class="secondary" type="button">Search</button></div><small id="peopleStatus" class="muted"></small><div id="peopleSearchResults" class="peopleList"></div></section><section class="homeWidget"><div class="widgetHeading"><div><span class="eyebrow">REQUESTS</span><h2>Friend requests</h2></div><small id="friendRequestCount" class="muted"></small></div><div id="friendRequestsList" class="peopleList"></div></section><section class="homeWidget"><div class="widgetHeading"><div><span class="eyebrow">FRIENDS</span><h2>Your people</h2></div><small id="friendsCount" class="muted"></small></div><div id="friendsList" class="peopleList"></div></section></section>
 
       <div id="inviteCard" class="inviteCard hidden">
         <div class="inviteIcon">↘</div>
-        <div class="inviteCopy"><span>Private invite</span><strong>Someone invited you to Bloop.</strong><small>You only join if you accept. (But I'd accept that if I were you)</small></div>
+        <div class="inviteCopy"><span>Private invite</span><strong>Someone invited you to bloop.</strong><small>You only join if you accept. (But I'd accept that if I were you)</small></div>
         <div class="inviteActions"><button id="declineInviteBtn" class="secondary" type="button">Not now</button><button id="acceptInviteBtn" class="primary" type="button">Accept & join</button></div>
       </div>
 
       <div class="landingActions"><button id="createBtn" class="primary">Make a new chat</button></div>
 
       <section class="homeWidget joinCodeWidget">
-        <div class="widgetHeading"><div><span class="eyebrow">QUICK JOIN</span><h2>Got a Bloop code?</h2></div></div>
+        <div class="widgetHeading"><div><span class="eyebrow">QUICK JOIN</span><h2>Got a bloop code?</h2></div></div>
         <p class="muted">Type the 4-digit code they sent you — no link needed.</p>
-        <div class="joinCodeRow"><input id="joinCodeInput" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="e.g. 4827" aria-label="4 digit Bloop code"><button id="joinCodeBtn" class="secondary" type="button">Join</button></div>
+        <div class="joinCodeRow"><input id="joinCodeInput" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="e.g. 4827" aria-label="4 digit bloop code"><button id="joinCodeBtn" class="secondary" type="button">Join</button></div>
         <small id="joinCodeStatus" class="muted"></small>
       </section>
-
-      <section class="homeWidget deviceTransferWidget">
-        <div class="widgetHeading"><div><span class="eyebrow">CONTINUE</span><h2>Continue an existing chat</h2></div></div>
-        <p class="muted">Already joined on another device? Enter the chat's 4-digit Bloop code and your 4-digit device PIN.</p>
-        <div class="continueChatFields">
-          <input id="continueChatCode" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="e.g. 4827" aria-label="4 digit chat code">
-          <input id="continueChatPin" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="PIN" aria-label="4 digit device PIN">
-          <button id="continueChatBtn" class="secondary" type="button">Continue</button>
-        </div>
-        <small id="continueChatStatus" class="muted"></small>
-      </section>
-      <section class="homeWidget deviceLinkRedeemWidget">
-        <div class="widgetHeading"><div><span class="eyebrow">LINK A DEVICE</span><h2>Got a device-link code?</h2></div></div>
-        <p class="muted">Use the temporary code shown inside your chat on the other device.</p>
-        <div class="joinCodeRow"><input id="deviceTransferInput" inputmode="text" autocomplete="one-time-code" maxlength="11" placeholder="Device code" aria-label="Device link code"><button id="deviceTransferBtn" class="secondary" type="button">Link</button></div>
-        <small id="deviceTransferStatus" class="muted"></small>
-      </section>
+      <section class="homeWidget accountSignInWidget"><div class="widgetHeading"><div><span class="eyebrow">YOUR BLOOP ACCOUNT</span><h2>Already have an account?</h2></div></div><p class="muted">Sign in on another phone, tablet or computer and your chats appear there too.</p><div class="accountSignInFields"><input id="accountSignInName" maxlength="24" placeholder="Your name" autocomplete="name"><div class="usernameInput"><span>@</span><input id="accountSignInUsername" maxlength="20" placeholder="username" autocapitalize="none" autocomplete="username"></div><input id="accountSignInPin" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" autocomplete="current-password"><button id="accountSignInBtn" class="secondary" type="button">Sign in</button></div><small id="accountSignInStatus" class="muted">New account? Use Edit profile to choose your photo, name, username and PIN.</small></section>
 
       <section id="contactsWidget" class="homeWidget contactsWidget hidden">
         <div class="widgetHeading"><div><span class="eyebrow">YOUR CHATS</span><h2>People</h2></div><small id="contactsCount" class="muted"></small></div>
@@ -144,8 +128,8 @@
 </section>
 
 <section class="homeWidget quickReturnWidget">
-  <div class="widgetHeading"><div><span class="eyebrow">QUICK RETURN</span><h2>Bookmark Bloop</h2></div></div>
-  <p class="muted">Save Bloop so you can jump straight back after using the quick exit.</p>
+  <div class="widgetHeading"><div><span class="eyebrow">QUICK RETURN</span><h2>Bookmark bloop</h2></div></div>
+  <p class="muted">Save bloop so you can jump straight back after using the quick exit.</p>
   <button id="bookmarkBtn" class="secondary" type="button">Bookmark / Add to Home Screen</button>
   <small id="bookmarkHint" class="bookmarkHint muted"></small>
 </section>
@@ -166,9 +150,9 @@
       <button id="shareBackBtn" class="backBtn" type="button">← Home</button>
       <div class="logo small">↗</div>
       <h2>Invite ready.</h2>
-      <p class="muted"><b>Fastest:</b> send them the short code below. They can open Bloop on any device, type it, and join. The full link is optional.</p>
+      <p class="muted"><b>Fastest:</b> send them the short code below. They can open bloop on any device, type it, and join. The full link is optional.</p>
       <div class="shareRow"><input id="shareLink" readonly /><button id="copyBtn">Copy link</button></div>
-      <label class="shareCodeLabel">Your 4-digit Bloop code</label>
+      <label class="shareCodeLabel">Your 4-digit bloop code</label>
       <div class="shareRow"><input id="shareCode" readonly placeholder="4-digit code" /><button id="copyCodeBtn" type="button">Copy code</button></div><div class="customQuickCode"><input id="customQuickCode" inputmode="numeric" maxlength="4" placeholder="e.g. 4827"><button id="setQuickCodeBtn" class="secondary" type="button">Set my code</button></div><small id="quickCodeStatus" class="muted">Change it to any available 4-digit code.</small>
       <button id="enterBtn" class="primary">Go to my chat</button>
     </section>
@@ -180,8 +164,8 @@
           <img id="themAvatarTop" class="avatar partnerAvatar" alt="">
           <div class="partnerText"><strong id="chatPartnerName">Friend</strong><div class="presenceLine"><span id="presenceDot" class="presenceDot offline"></span><div id="presence" class="presence">Connecting…</div></div></div>
         </div>
-        <div class="topActions"><span id="chatClock" class="chatClock">--:--</span><button id="refreshStatusBtn" class="iconBtn refreshStatusBtn" type="button" aria-label="Refresh online status" title="Refresh online / last seen">↻</button><button id="linkDeviceBtn" class="iconBtn linkDeviceBtn" type="button" aria-label="Link another device" title="Link another device">⇄</button><button id="chatPrivacyBtn" class="iconBtn" aria-label="Blur screen now" title="Blur screen now">◉</button><button id="emergencyBtn" class="iconBtn dangerBtn" aria-label="Emergency lock" title="Emergency lock">!</button><button id="profileBtn" class="iconBtn" aria-label="Profile and appearance">☺</button></div>
-        <div id="chatCodeWrap" class="chatCodePill hidden" title="Bloop chat code"><span>Chat code <b id="chatCodeValue">—</b></span><button id="chatCodeCopy" type="button">Copy</button></div>
+        <div class="topActions"><span id="chatClock" class="chatClock">--:--</span><button id="refreshStatusBtn" class="iconBtn refreshStatusBtn" type="button" aria-label="Refresh online status" title="Refresh online / last seen">↻</button><button id="chatPrivacyBtn" class="iconBtn" aria-label="Blur screen now" title="Blur screen now">◉</button><button id="emergencyBtn" class="iconBtn dangerBtn" aria-label="Emergency lock" title="Emergency lock">!</button><button id="profileBtn" class="iconBtn" aria-label="Edit profile">☺</button></div>
+        <div id="chatCodeWrap" class="chatCodePill hidden" title="bloop chat code"><span>Chat code <b id="chatCodeValue">—</b></span><button id="chatCodeCopy" type="button">Copy</button></div>
       </header>
 
       <div id="messages" class="messages" aria-live="polite"></div>
@@ -211,22 +195,20 @@
   <dialog id="profileDialog" class="profileDialog">
     <form method="dialog" class="dialogCard">
       <button class="closeBtn" value="cancel" aria-label="Close">×</button>
-      <span class="eyebrow">PROFILE & APPEARANCE</span><h2>Your Bloop profile</h2>
+      <span class="eyebrow">PROFILE</span><h2>Your bloop profile</h2>
       <button type="button" id="avatarPick" class="avatarPicker"><img id="profileAvatar" class="avatar big" alt=""><span>Change photo</span></button>
       <input id="avatarInput" type="file" accept="image/*" hidden />
       <div class="dialogSection profileIdentityFields">
         <span class="dialogLabel">My profile</span>
         <label>Name<input id="profileDisplayName" maxlength="24" placeholder="Name" autocomplete="name"></label>
         <label>Username<div class="usernameInput"><span>@</span><input id="profileUsername" maxlength="20" placeholder="username" autocapitalize="none" autocomplete="off"></div></label>
-        <label>Device PIN<input id="profileDevicePin" inputmode="numeric" maxlength="4" placeholder="4 digits" autocomplete="off"></label>
-        <small class="muted profilePinHint">Saved across your Bloop chats on this profile. Use it with a chat’s 4-digit code on another device.</small>
+        <label>Account PIN<input id="profileDevicePin" inputmode="numeric" maxlength="4" placeholder="4 digits" autocomplete="off"></label>
+        <small class="muted profilePinHint">This 4-digit PIN signs you into your bloop account on your other devices.</small>
         <small id="profileIdentityStatus" class="muted"></small>
       </div>
-      <div class="dialogSection"><span class="dialogLabel">Theme</span><div id="dialogThemeGrid" class="themeGrid compact"></div></div>
-      <div class="dialogSection"><span class="dialogLabel">My bubble colour</span><div id="dialogColorChoices" class="colorChoices"></div></div>
       <div class="dialogSection"><label class="idleSetting">Auto-blur after inactivity<select id="dialogIdleBlurSelect" aria-label="Auto blur after inactivity"><option value="0">Off</option><option value="1">1 minute</option><option value="2">2 minutes</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option></select></label></div>
       <div class="dialogSection alertSettings"><label class="switchRow"><span>Message notifications</span><input id="dialogNotificationToggle" type="checkbox"><i></i></label><label class="switchRow"><span>Tiny message sound</span><input id="dialogSoundToggle" type="checkbox" checked><i></i></label></div>
-      <div class="dialogSection"><button type="button" id="dialogBookmarkBtn" class="secondary full">Bookmark Bloop</button></div>
+      <div class="dialogSection"><button type="button" id="dialogBookmarkBtn" class="secondary full">Bookmark bloop</button></div>
       <div class="dialogSection peopleAccountSettings"><span class="dialogLabel">People account</span><p class="muted">Removes your username from People, friend requests and friendships. Your chats and messages stay.</p><button type="button" id="deletePeopleAccountBtn" class="dangerOutline full">Delete People account</button><small id="deletePeopleStatus" class="muted"></small></div>
       <button type="button" id="saveProfile" class="primary full">Save</button>
     </form>
@@ -238,24 +220,22 @@
       <p class="muted setupText">You can change this later.</p>
       <button type="button" id="setupAvatarPick" class="avatarPicker"><img id="setupAvatar" class="avatar big" alt=""><span>Add a photo</span></button>
       <input id="setupAvatarInput" type="file" accept="image/*" hidden />
-      <div class="dialogSection"><span class="dialogLabel">Pick a theme</span><div id="setupThemeGrid" class="themeGrid compact"></div></div>
-      <div class="dialogSection"><span class="dialogLabel">Your message colour</span><div id="setupColorChoices" class="colorChoices"></div></div>
       <div class="dialogSection"><label class="idleSetting">Auto-blur after inactivity<select id="setupIdleBlurSelect" aria-label="Auto blur after inactivity"><option value="0">Off</option><option value="1">1 minute</option><option value="2">2 minutes</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option></select></label></div>
       <div class="dialogSection alertSettings"><label class="switchRow"><span>Message notifications</span><input id="setupNotificationToggle" type="checkbox"><i></i></label><label class="switchRow"><span>Tiny message sound</span><input id="setupSoundToggle" type="checkbox" checked><i></i></label></div>
-      <div class="dialogSection"><button type="button" id="setupBookmarkBtn" class="secondary full">Bookmark Bloop</button></div>
+      <div class="dialogSection"><button type="button" id="setupBookmarkBtn" class="secondary full">Bookmark bloop</button></div>
       <button type="button" id="finishSetup" class="primary full">Save & enter chat</button>
       <button type="button" id="skipSetup" class="textBtn full">Skip for now</button>
     </form>
   </dialog>
 
   <dialog id="identityDialog" class="profileDialog identityDialog">
-    <form method="dialog" class="dialogCard identityCard">
+    <form method="dialog" class="dialogCard identityCard"><button id="identityCloseBtn" class="closeBtn" type="button" aria-label="Maybe later">×</button>
       <span class="eyebrow">Hey! 👋</span><h2>What should we call you?</h2>
       <p class="muted">Set this once. New chats will use it automatically.</p>
       <label>Your name<input id="identityName" maxlength="24" placeholder="Name" autocomplete="name"></label>
       <label>Username<div class="usernameInput"><span>@</span><input id="identityUsername" maxlength="20" placeholder="username" autocapitalize="none" autocomplete="off"></div></label>
       <div id="identityError" class="lockError"></div>
-      <button id="saveIdentity" type="button" class="primary full">Continue</button>
+      <button id="saveIdentity" type="button" class="primary full">Continue</button><button id="identityLaterBtn" type="button" class="textBtn full">Maybe later</button>
     </form>
   </dialog>
 
@@ -265,23 +245,5 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="/app.js"></script>
   <div id="globalMessageToast" class="globalMessageToast hidden" role="status" aria-live="polite"></div>
-
-
-
-
-<dialog id="deviceTransferDialog" class="setupDialog deviceTransferDialog">
-  <form method="dialog" class="setupCard">
-    <button class="dialogClose" value="cancel" aria-label="Close">×</button>
-    <div class="deviceDialogBrand"><img src="/assets/bloop-icon.jpg" alt=""><div><span class="eyebrow">LINK A DEVICE</span><h2>Open this chat somewhere else</h2></div></div>
-    <p class="muted">On the other device, open Bloop and enter this one-time code. It expires in 10 minutes.</p>
-    <div class="deviceTransferCode" id="deviceTransferCode">—</div>
-    <div class="deviceTransferActions">
-      <button id="copyDeviceTransferCode" type="button" class="secondary">Copy code</button>
-      <button id="newDeviceTransferCode" type="button" class="secondary">New code</button>
-    </div>
-    <small id="deviceTransferExpiry" class="muted"></small>
-  </form>
-</dialog>
-
 </body>
 </html>

@@ -69,3 +69,14 @@ test
 - Device PIN is profile-level: save once and Bloop applies it to every saved chat and future opened/joined chats.
 - Adds Delete People account while preserving normal chats/messages.
 - Adds directory opt-out so deleted People accounts do not immediately reappear from profile backfill.
+
+## v37 Account sign-in + profile cleanup
+- Adds multi-device bloop account sign-in using name, username and 4-digit PIN.
+- Removes Link a device and the old Continue existing chat UI.
+- Each signed-in device gets its own session, so multiple devices can stay signed in.
+- Chats opened while signed in are linked to the account and restored after sign-in elsewhere.
+- Adds account-level profile photo upload and syncs the photo to linked chats.
+- Adds × and Maybe later to the identity popup.
+- Removes theme/message colour from Edit profile; Home remains the customization location.
+- Theme previews are small circular swatches, and bloop logo treatments are circular.
+- Visible bloop branding uses lowercase.
