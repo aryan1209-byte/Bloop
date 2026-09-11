@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="/assets/bloop-icon.jpg">
 </head>
 <body>
-<div class="bloopVersion">bloop v37</div>
+<div class="bloopVersion">bloop v38</div>
   <div class="pageWaterBg" aria-hidden="true"></div>
   <div class="bloopBrandBadge" aria-label="bloop"><img src="/assets/bloop-icon.jpg" alt=""><span>bloop</span></div>
   <div id="appChrome" class="appChrome" aria-hidden="false">
@@ -56,7 +56,7 @@
         </div>
       </div>
       <p class="homeLead">Your private corner for messages, photos, voice notes and much more!</p>
-      <div class="homeProfileRow"><button id="homeEditProfileBtn" class="secondary homeProfileBtn" type="button"><span><strong>Edit profile</strong><small>Photo, name, username & account PIN</small></span></button></div>
+      <div class="homeProfileRow"><button id="homeEditProfileBtn" class="secondary homeProfileBtn" type="button"><span><strong>Edit profile</strong><small>Name, username & device PIN</small></span></button></div>
 <div class="homeTabs"><button id="homeChatsTab" class="homeTab active" type="button">Chats</button><button id="homePeopleTab" class="homeTab" type="button">People</button></div>
 <section id="peoplePanel" class="peoplePanel hidden">
         <section class="homeWidget peopleDirectoryWidget">
@@ -79,7 +79,7 @@
         <div class="joinCodeRow"><input id="joinCodeInput" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="e.g. 4827" aria-label="4 digit bloop code"><button id="joinCodeBtn" class="secondary" type="button">Join</button></div>
         <small id="joinCodeStatus" class="muted"></small>
       </section>
-      <section class="homeWidget accountSignInWidget"><div class="widgetHeading"><div><span class="eyebrow">YOUR BLOOP ACCOUNT</span><h2>Already have an account?</h2></div></div><p class="muted">Sign in on another phone, tablet or computer and your chats appear there too.</p><div class="accountSignInFields"><input id="accountSignInName" maxlength="24" placeholder="Your name" autocomplete="name"><div class="usernameInput"><span>@</span><input id="accountSignInUsername" maxlength="20" placeholder="username" autocapitalize="none" autocomplete="username"></div><input id="accountSignInPin" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" autocomplete="current-password"><button id="accountSignInBtn" class="secondary" type="button">Sign in</button></div><small id="accountSignInStatus" class="muted">New account? Use Edit profile to choose your photo, name, username and PIN.</small></section>
+      <section class="homeWidget accountSignInWidget"><div class="widgetHeading"><div><span class="eyebrow">YOUR BLOOP ACCOUNT</span><h2>Already have an account?</h2></div></div><p class="muted">Sign in on another device with your name, username and 4-digit PIN.</p><div class="accountSignInFields"><input id="accountSignInName" maxlength="24" placeholder="Your name"><div class="usernameInput"><span>@</span><input id="accountSignInUsername" maxlength="20" placeholder="username" autocapitalize="none"></div><input id="accountSignInPin" inputmode="numeric" maxlength="4" placeholder="4-digit PIN"><button id="accountSignInBtn" class="secondary" type="button">Sign in</button></div><small id="accountSignInStatus" class="muted">Your saved chats can be opened on multiple devices.</small></section>
 
       <section id="contactsWidget" class="homeWidget contactsWidget hidden">
         <div class="widgetHeading"><div><span class="eyebrow">YOUR CHATS</span><h2>People</h2></div><small id="contactsCount" class="muted"></small></div>
@@ -202,8 +202,8 @@
         <span class="dialogLabel">My profile</span>
         <label>Name<input id="profileDisplayName" maxlength="24" placeholder="Name" autocomplete="name"></label>
         <label>Username<div class="usernameInput"><span>@</span><input id="profileUsername" maxlength="20" placeholder="username" autocapitalize="none" autocomplete="off"></div></label>
-        <label>Account PIN<input id="profileDevicePin" inputmode="numeric" maxlength="4" placeholder="4 digits" autocomplete="off"></label>
-        <small class="muted profilePinHint">This 4-digit PIN signs you into your bloop account on your other devices.</small>
+        <label>Device PIN<input id="profileDevicePin" inputmode="numeric" maxlength="4" placeholder="4 digits" autocomplete="off"></label>
+        <small class="muted profilePinHint">Saved across your bloop chats on this profile. Use it with a chat’s 4-digit code on another device.</small>
         <small id="profileIdentityStatus" class="muted"></small>
       </div>
       <div class="dialogSection"><label class="idleSetting">Auto-blur after inactivity<select id="dialogIdleBlurSelect" aria-label="Auto blur after inactivity"><option value="0">Off</option><option value="1">1 minute</option><option value="2">2 minutes</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option></select></label></div>
@@ -220,6 +220,8 @@
       <p class="muted setupText">You can change this later.</p>
       <button type="button" id="setupAvatarPick" class="avatarPicker"><img id="setupAvatar" class="avatar big" alt=""><span>Add a photo</span></button>
       <input id="setupAvatarInput" type="file" accept="image/*" hidden />
+      <div class="dialogSection"><span class="dialogLabel">Pick a theme</span><div id="setupThemeGrid" class="themeGrid compact"></div></div>
+      <div class="dialogSection"><span class="dialogLabel">Your message colour</span><div id="setupColorChoices" class="colorChoices"></div></div>
       <div class="dialogSection"><label class="idleSetting">Auto-blur after inactivity<select id="setupIdleBlurSelect" aria-label="Auto blur after inactivity"><option value="0">Off</option><option value="1">1 minute</option><option value="2">2 minutes</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option></select></label></div>
       <div class="dialogSection alertSettings"><label class="switchRow"><span>Message notifications</span><input id="setupNotificationToggle" type="checkbox"><i></i></label><label class="switchRow"><span>Tiny message sound</span><input id="setupSoundToggle" type="checkbox" checked><i></i></label></div>
       <div class="dialogSection"><button type="button" id="setupBookmarkBtn" class="secondary full">Bookmark bloop</button></div>

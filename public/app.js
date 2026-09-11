@@ -109,7 +109,6 @@ const identityKey='justtwo:identity:v1';
 const peopleTokenKey='bloop:peopleToken:v1';
 const profileDevicePinKey='bloop:profileDevicePin:v1';
 const identitySkippedKey='bloop:identitySkipped:v1';
-const accountAvatarKey='bloop:accountAvatar:v1';
 const setupKey=(id,role)=>`justtwo:${id}:${role}:setup-v3`;
 function getRooms(){try{return [...new Set(JSON.parse(localStorage.getItem(roomsKey)||'[]'))];}catch{return[];}}
 function rememberRoom(id){const rooms=getRooms().filter(Boolean);if(!rooms.includes(id))rooms.unshift(id);localStorage.setItem(roomsKey,JSON.stringify(rooms.slice(0,30)));localStorage.setItem(lastRoomKey,id);}
@@ -626,22 +625,381 @@ $('joinCodeBtn')?.addEventListener('click',joinByCode);$('joinCodeInput')?.addEv
 
 $('continueChatCode')?.addEventListener('input',e=>{e.target.value=formatJoinCode(e.target.value);if($('continueChatStatus'))$('continueChatStatus').textContent='';});
 $('continueChatPin')?.addEventListener('input',e=>{e.target.value=String(e.target.value||'').replace(/\D/g,'').slice(0,4);if($('continueChatStatus'))$('continueChatStatus').textContent='';});
-async function signInbloopAccount(){
-  const name=$('accountSignInName')?.value.trim().slice(0,24)||'',username=$('accountSignInUsername')?.value.trim().replace(/^@+/,'').replace(/[^a-zA-Z0-9_.]/g,'').slice(0,20)||'',pin=String($('accountSignInPin')?.value||'').replace(/\D/g,'').slice(0,4),status=$('accountSignInStatus');
-  if(!name||username.length<3||pin.length!==4){if(status)status.textContent='Enter your name, username and 4-digit PIN.';return;}
-  const btn=$('accountSignInBtn');btn.disabled=true;btn.textContent='Signing in…';if(status)status.textContent='Checking your account…';
-  try{const res=await fetch('/api/people/sign-in',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({displayName:name,username,pin})});const data=await res.json().catch(()=>({}));if(!res.ok){if(status)status.textContent=data.error||'Could not sign in.';return;}
-    localStorage.setItem(peopleTokenKey,data.peopleToken);localStorage.setItem(identityKey,JSON.stringify({name:data.profile.displayName,username:data.profile.username}));localStorage.setItem(profileDevicePinKey,pin);localStorage.removeItem(identitySkippedKey);if(data.profile.avatarUrl)localStorage.setItem(accountAvatarKey,data.profile.avatarUrl);
-    const existing=getRooms(),incoming=[];(data.chats||[]).forEach(chat=>{localStorage.setItem(storageKey(chat.roomId),chat.authToken);localStorage.setItem(roleKey(chat.roomId),chat.role);incoming.push(chat.roomId);});localStorage.setItem(roomsKey,JSON.stringify([...new Set([...incoming,...existing])].slice(0,30)));if(status)status.textContent=`Signed in ✓ ${incoming.length?`Loaded ${incoming.length} chat${incoming.length===1?'':'s'}.`:'Your account is ready.'}`;await setupContacts({notify:false});await loadPeopleDashboard().catch(()=>{});
-  }catch{if(status)status.textContent='Could not sign in right now.';}finally{btn.disabled=false;btn.textContent='Sign in';}
+async function continueExistingChat(){
+  const code=formatJoinCode($('continueChatCode')?.value||'');
+  const pin=String($('continueChatPin')?.value||'').replace(/\D/g,'').slice(0,4);
+  const status=$('continueChatStatus');
+  if(!/^\d{4}$/.test(code)){if(status)status.textContent='Enter the 4-digit chat code.';return;}
+  if(pin.length!==4){if(status)status.textContent='Enter your 4-digit device PIN.';return;}
+  if(status)status.textContent='Opening chat…';
+  try{
+    const r=await fetch('/api/continue-chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code,pin})});
+    const data=await r.json();
+    if(!r.ok){if(status)status.textContent=data.error||'Could not continue that chat.';return;}
+    currentRoom=data.roomId;authToken=data.authToken;myRole=data.role;
+    localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);rememberRoom(currentRoom);
+    if(status)status.textContent='Connected ✓';
+    await openChat(true);
+  }catch{if(status)status.textContent='Could not connect. Try again.';}
 }
-$('accountSignInPin')?.addEventListener('input',e=>e.target.value=String(e.target.value||'').replace(/\D/g,'').slice(0,4));$('accountSignInBtn')?.addEventListener('click',signInbloopAccount);$('accountSignInPin')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();signInbloopAccount();}});
+$('continueChatBtn')?.addEventListener('click',continueExistingChat);
+$('continueChatPin')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();continueExistingChat();}});
+
+function formatDeviceTransferCode(value){const raw=String(value||'').toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,10);return raw.length>5?`${raw.slice(0,5)}-${raw.slice(5)}`:raw;}
+$('deviceTransferInput')?.addEventListener('input',e=>{e.target.value=formatDeviceTransferCode(e.target.value);if($('deviceTransferStatus'))$('deviceTransferStatus').textContent='';});
+async function redeemDeviceTransferCode(){
+  const input=$('deviceTransferInput'),status=$('deviceTransferStatus'),code=formatDeviceTransferCode(input?.value);
+  if(code.replace('-','').length!==10){if(status)status.textContent='Enter the full device-link code.';return;}
+  if(status)status.textContent='Linking this device…';
+  const r=await fetch('/api/device-transfer/redeem',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code})});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){if(status)status.textContent=d.error||'Could not link this device.';return;}
+  currentRoom=d.roomId;authToken=d.authToken;myRole=d.role;
+  localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);rememberRoom(currentRoom);
+  if(status)status.textContent='Linked ✓';await openChat(true);
+}
+$('deviceTransferBtn')?.addEventListener('click',redeemDeviceTransferCode);
+$('deviceTransferInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();redeemDeviceTransferCode();}});
+
+let deviceTransferExpiryTimer=null;
+function renderDeviceTransferExpiry(expiresAt){
+  clearInterval(deviceTransferExpiryTimer);const el=$('deviceTransferExpiry');
+  const tick=()=>{const ms=Number(expiresAt)-Date.now();if(!el)return;if(ms<=0){el.textContent='Expired — tap New code.';clearInterval(deviceTransferExpiryTimer);return;}const m=Math.floor(ms/60000),sec=Math.floor((ms%60000)/1000);el.textContent=`Expires in ${m}:${String(sec).padStart(2,'0')}`;};
+  tick();deviceTransferExpiryTimer=setInterval(tick,1000);
+}
+async function createDeviceTransferCode(){
+  if(!currentRoom||!authToken)return;
+  const codeEl=$('deviceTransferCode'),expiry=$('deviceTransferExpiry');if(codeEl)codeEl.textContent='Creating…';if(expiry)expiry.textContent='';
+  const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/device-transfer-code`,{method:'POST',headers:{'x-chat-token':authToken}});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){if(codeEl)codeEl.textContent='Could not create code';return;}
+  if(codeEl)codeEl.textContent=d.code;renderDeviceTransferExpiry(d.expiresAt);
+}
+$('linkDeviceBtn')?.addEventListener('click',async()=>{const dlg=$('deviceTransferDialog');if(!dlg)return;dlg.showModal();await createDeviceTransferCode();});
+$('newDeviceTransferCode')?.addEventListener('click',createDeviceTransferCode);
+$('copyDeviceTransferCode')?.addEventListener('click',async()=>{const code=$('deviceTransferCode')?.textContent?.trim();if(!code||code==='—'||code.includes('Creating')||code.includes('Could not'))return;try{await navigator.clipboard.writeText(code);const b=$('copyDeviceTransferCode');b.textContent='Copied ✓';setTimeout(()=>b.textContent='Copy code',1000);}catch{}});
+
+
+
+$('enterBtn').onclick=()=>{
+  rememberRoom(currentRoom);
+  openChat(true);
+};
+$('acceptInviteBtn').onclick=async()=>{
+  if(!pendingInvite)return;
+  const existingToken=localStorage.getItem(storageKey(inviteRoomId));
+  const r=await fetch(`/api/rooms/${encodeURIComponent(inviteRoomId)}/join`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({shareToken:inviteToken,existingToken})});
+  const data=await r.json(); if(!r.ok)return fail(data.error||'Could not join.');
+  currentRoom=inviteRoomId;authToken=data.authToken;myRole=data.role;pendingInvite=false;
+  localStorage.setItem(storageKey(currentRoom),authToken);localStorage.setItem(roleKey(currentRoom),myRole);rememberRoom(currentRoom);
+  history.replaceState({view:'home'},'','/'); await openChat(true);
+};
+$('declineInviteBtn').onclick=async()=>{
+  if(!pendingInvite)return;
+  try{
+    await fetch(`/api/rooms/${encodeURIComponent(inviteRoomId)}/decline`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({shareToken:inviteToken})});
+  }catch{}
+  if(declinedInviteKey&&inviteToken)localStorage.setItem(declinedInviteKey,inviteToken);
+  pendingInvite=false;history.replaceState({view:'home'},'','/');showInviteCard();showHomeNotice('Invite declined.');
+};
+function fail(message){$('errorText').textContent=message;show('error');}
+async function resumeRoom(id,pushHistory=true){currentRoom=id;authToken=localStorage.getItem(storageKey(id));myRole=localStorage.getItem(roleKey(id));if(!authToken)return fail('This browser does not have access to that private chat.');await openChat(pushHistory);}
+async function openChat(pushHistory=true){
+  stopHomeRefresh();
+  if(!currentRoom||!authToken)return fail('Missing chat access.');
+  const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/messages`,{headers:{'x-chat-token':authToken}});const data=await r.json();if(!r.ok)return fail(data.error||'Could not open chat.');
+  myRole=data.role;profiles=data.profiles||profiles;currentContactState=data.contactState||{removed:false,removedBy:null,removedAt:null,removedByMe:false};rememberRoom(currentRoom);await syncIdentityToRoom();await applySavedProfilePinToCurrentChat();refreshHeader();setChatCode(data.joinCode||'');
+  applyContactRemovalState(currentContactState);
+  const box=$('messages');box.innerHTML='';data.messages.forEach(addMessage);if(!data.messages.length)box.innerHTML='<div class="empty"><b>It’s quiet in here.</b><span>One of you has to start 😭</span></div>';
+  show('chat');connectSocket();scrollBottom();
+  if(pushHistory)history.pushState({view:'chat',roomId:currentRoom},'',`/chat/${encodeURIComponent(currentRoom)}`);else history.replaceState({view:'chat',roomId:currentRoom},'',`/chat/${encodeURIComponent(currentRoom)}`);
+  maybeShowSetup();
+}
+function maybeShowSetup(){
+  // v32: customization is manual from the profile button; never interrupt chat entry.
+  if(currentRoom&&myRole)localStorage.setItem(setupKey(currentRoom,myRole),'done');
+}
+
+function connectSocket(){
+  socket?.disconnect();socket=io({auth:{roomId:currentRoom,authToken}});
+  socket.on('message',msg=>{clearEmpty();addMessage(msg);scrollBottom();if(msg.sender!==myRole){notifyIncomingMessage(msg);socket.emit('seen');}});
+  socket.on('presence',data=>{lastPresence=data||{};updatePresence(lastPresence);});
+  socket.on('typing',data=>{const other=myRole==='creator'?'guest':'creator';if(data?.role!==other)return;otherTyping=Boolean(data.typing);updatePresence(lastPresence);updateTypingBubble();});
+  socket.on('reaction',({messageId,reactions,emoji,role})=>{updateReactions(messageId,reactions);if(role&&role!==myRole&&emoji)reactionBurst(emoji);});
+  socket.on('seen',({messageIds,seenAt})=>{(messageIds||[]).forEach(id=>markSeen(id,seenAt));});
+  socket.on('connect',()=>{socket.emit('seen');});
+  socket.on('message-deleted',({messageId})=>markDeleted(messageId));
+  socket.on('contact-state',state=>{currentContactState={...state,removedByMe:state?.removedBy===myRole};applyContactRemovalState(currentContactState);if(!$('landing').classList.contains('hidden'))setupContacts({notify:false});});
+  socket.on('contact-deleted',()=>{const id=currentRoom;socket?.disconnect();if(id)forgetRoom(id);currentRoom=null;authToken=null;myRole=null;goHome(false).then(()=>showHomeNotice('That chat was permanently deleted.'));});
+  socket.on('send-blocked',()=>{applyContactRemovalState({...currentContactState,removed:true,removedBy:myRole,removedByMe:true});});
+
+  socket.on('profile',data=>{profiles[data.role]={...(profiles[data.role]||{}),displayName:data.displayName,avatarUrl:data.avatarUrl,username:data.username||''};refreshHeader();document.querySelectorAll(`[data-sender="${data.role}"] .messageAvatar`).forEach(img=>setAvatar(img,data.role));});
+  socket.on('invite-declined',()=>{if(myRole==='creator'&&currentRoom){const id=currentRoom;socket?.disconnect();forgetRoom(id);currentRoom=null;authToken=null;myRole=null;goHome(false).then(()=>showHomeNotice('They didn’t accept your invite, so the chat was removed.'));}});
+  socket.on('emergency-lock',()=>showEmergencyLock());
+  socket.on('connect_error',err=>{if(err?.message==='app_locked')showEmergencyLock();else $('presence').textContent='connection lost';});
+}
+function formatLastSeen(ts){if(!ts)return'offline';const d=new Date(ts),now=new Date(),same=d.toDateString()===now.toDateString(),y=new Date(now);y.setDate(now.getDate()-1);const time=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});if(same)return`last seen today at ${time}`;if(d.toDateString()===y.toDateString())return`last seen yesterday at ${time}`;return`last seen ${d.toLocaleDateString([],{month:'short',day:'numeric'})} at ${time}`;}
+function updatePresence(data={}){const other=myRole==='creator'?'guest':'creator';const online=new Set(data.online||[]);const p=$('presence'),dot=$('presenceDot');const activity=data.activity?.[other]||profiles[other]?.activityStatus;let next,cls;if(activity==='emergency'){next='emergency button pressed';cls='emergency';}else if(activity==='blurred'){next='screen blurred';cls='blurred';}else if(activity==='recording-audio'){next='recording audio…';cls='busy';}else if(activity==='taking-photo'){next='taking a photo…';cls='busy';}else if(otherTyping&&online.has(other)){next='typing…';cls='online';}else if(online.has(other)){next='online';cls='online';}else if(data.lastSeen?.[other]||profiles[other]?.lastSeen){next=formatLastSeen(data.lastSeen?.[other]||profiles[other]?.lastSeen);cls='lastseen';}else{next='offline';cls='offline';}dot.className=`presenceDot ${cls}`;if(p.textContent!==next){p.textContent=next;p.classList.remove('statusPulse');void p.offsetWidth;p.classList.add('statusPulse');}}
+function updateTypingBubble(){
+  $('typingBubble')?.classList.add('hidden');
+  const box=$('messages');if(!box)return;
+  let row=box.querySelector('.typingMessageRow');
+  if(!otherTyping){row?.remove();return;}
+  if(!row){
+    const other=myRole==='creator'?'guest':'creator';
+    row=document.createElement('div');row.className='typingMessageRow';
+    const img=document.createElement('img');img.className='avatar messageAvatar';img.alt='';setAvatar(img,other);
+    const bubble=document.createElement('div');bubble.className='typingDots';bubble.innerHTML='<span></span><span></span><span></span>';
+    row.append(img,bubble);box.append(row);
+  }
+  setTimeout(scrollBottom,20);
+}
+function setTyping(value){if(!socket?.connected)return;if(sentTyping!==value){sentTyping=value;socket.emit('typing',value);}clearTimeout(typingTimer);if(value)typingTimer=setTimeout(()=>setTyping(false),1400);}
+function clearEmpty(){if($('messages').querySelector('.empty'))$('messages').innerHTML='';}
+
+const reactionChoices=[...new Set(Object.values(emojiData).flat())];
+async function broadcastActivityStatus(status){
+  if(socket?.connected)socket.emit('activity-status',status);
+  const jobs=getRooms().map(id=>{const token=localStorage.getItem(storageKey(id));if(!token)return null;return fetch(`/api/rooms/${encodeURIComponent(id)}/activity-status`,{method:'POST',headers:{'content-type':'application/json','x-chat-token':token},body:JSON.stringify({status}),keepalive:true}).catch(()=>null);}).filter(Boolean);
+  if(jobs.length)await Promise.allSettled(jobs);
+}
+async function setCurrentChatActivity(status){
+  if(!currentRoom||!authToken)return;
+  if(socket?.connected){socket.emit('activity-status',status);return;}
+  try{await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/activity-status`,{method:'POST',headers:{'content-type':'application/json','x-chat-token':authToken},body:JSON.stringify({status}),keepalive:true});}catch{}
+}
+function engagePrivacyShield(reason='manual'){
+  clearTimeout(idleBlurTimer);idleBlurTimer=null;
+  $('privacyShield')?.classList.remove('hidden');
+  document.body.classList.add('privacyLocked');
+  broadcastActivityStatus('blurred');
+}
+function releasePrivacyShield(){
+  $('privacyShield')?.classList.add('hidden');
+  document.body.classList.remove('privacyLocked');
+  broadcastActivityStatus('active');
+  resetIdleBlurTimer();
+}
+let lastShieldTap=0;
+function shieldTap(){
+  const now=Date.now();
+  if(now-lastShieldTap<420){releasePrivacyShield();lastShieldTap=0;}else lastShieldTap=now;
+}
+$('privacyShield')?.addEventListener('dblclick',releasePrivacyShield);
+$('privacyShield')?.addEventListener('pointerup',e=>{if(e.pointerType!=='mouse')shieldTap();});
+$('privacyShield')?.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();shieldTap();}});
+$('privacyNowBtn')?.addEventListener('click',engagePrivacyShield);
+$('chatPrivacyBtn')?.addEventListener('click',engagePrivacyShield);
+$('refreshStatusBtn')?.addEventListener('click',async()=>{
+  if(!currentRoom||!authToken)return;
+  const btn=$('refreshStatusBtn');btn?.classList.add('spinning');
+  try{
+    await sendHeartbeat?.('active');
+    const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/messages`,{headers:{'x-chat-token':authToken},cache:'no-store'});
+    const data=await r.json();
+    if(r.ok){profiles=data.profiles||profiles;lastPresence=data.presence||lastPresence;refreshHeader();updatePresence(lastPresence);}
+  }catch{}
+  setTimeout(()=>btn?.classList.remove('spinning'),350);
+});
+
+
+function replyPreviewText(msg){
+  if(!msg)return '';
+  if(msg.deleted||msg.type==='deleted')return 'Deleted message';
+  if(msg.type==='image')return '📷 Photo';
+  if(msg.type==='audio')return '🎙 Voice note';
+  return String(msg.body||'Message').replace(/\s+/g,' ').slice(0,100);
+}
+function replySenderName(msg){
+  if(!msg)return 'Message';
+  if(msg.sender===myRole)return 'You';
+  return profiles[msg.sender]?.displayName||'Friend';
+}
+function cancelReply(){replyTarget=null;$('replyComposer')?.classList.add('hidden');$('replyComposerText').textContent='';$('replyComposerName').textContent='';}
+function startReply(msg){
+  if(!msg||msg.deletedAt)return;
+  replyTarget={id:Number(msg.id),sender:msg.sender,type:msg.type,body:msg.body||'',mediaUrl:msg.mediaUrl||null,deleted:false};
+  $('replyComposerName').textContent=`Replying to ${replySenderName(replyTarget)}`;
+  $('replyComposerText').textContent=replyPreviewText(replyTarget);
+  $('replyComposer').classList.remove('hidden');
+  $('input').focus();
+}
+function renderReplyReference(bubble,msg){
+  if(!msg.replyTo)return;
+  const ref=document.createElement('button');ref.type='button';ref.className='replyReference';
+  const name=document.createElement('strong');name.textContent=replySenderName(msg.replyTo);
+  const preview=document.createElement('span');preview.textContent=replyPreviewText(msg.replyTo);
+  ref.append(name,preview);
+  ref.onclick=()=>{const row=document.querySelector(`.messageRow[data-id="${msg.replyTo.id}"]`);if(row){row.scrollIntoView({behavior:'smooth',block:'center'});row.classList.add('replyFlash');setTimeout(()=>row.classList.remove('replyFlash'),900);}};
+  bubble.append(ref);
+}
+function renderMessageContent(bubble,msg){
+  if(msg.type==='image'){const img=document.createElement('img');img.className='messageImage';img.src=msg.mediaUrl;img.alt='Shared image';img.loading='lazy';bubble.append(img);}
+  else if(msg.type==='audio'){const audio=document.createElement('audio');audio.controls=true;audio.preload='metadata';audio.src=msg.mediaUrl;bubble.append(audio);}
+  else {const text=document.createElement('span');text.textContent=msg.body;bubble.append(text);appendLinkPreview(bubble,msg.body);}
+}
+function addMessage(msg){
+  const row=document.createElement('div');row.className=`messageRow ${msg.sender===myRole?'mine':'theirs'}`;row.dataset.id=msg.id;row.dataset.sender=msg.sender;row.dataset.type=msg.type||'text';row.dataset.body=msg.body||'';row.dataset.mediaUrl=msg.mediaUrl||'';row.dataset.deleted=msg.deletedAt?'1':'0';
+  if(msg.deletedAt)return;
+  const avatar=document.createElement('img');avatar.className='avatar messageAvatar';avatar.alt='';setAvatar(avatar,msg.sender);
+  const wrap=document.createElement('div');wrap.className='messageWrap';const bubble=document.createElement('div');bubble.className='msg';
+  renderReplyReference(bubble,msg);
+  renderMessageContent(bubble,msg);
+  const meta=document.createElement('div');meta.className='meta';
+  const timeSpan=document.createElement('span');timeSpan.textContent=new Date(msg.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});meta.append(timeSpan);
+  if(msg.sender===myRole&&!msg.deletedAt){const receipt=document.createElement('span');receipt.className='receipt';receipt.dataset.receiptFor=msg.id;receipt.textContent=msg.seenAt?'✓✓ seen':'✓ sent';meta.append(receipt);}
+  const actions=document.createElement('div');actions.className='msgActions';
+  if(!msg.deletedAt){const reply=document.createElement('button');reply.type='button';reply.className='messageReplyBtn';reply.title='Reply';reply.setAttribute('aria-label','Reply to message');reply.textContent='↩';reply.onclick=()=>startReply(msg);actions.append(reply);const react=document.createElement('button');react.type='button';react.title='React';react.textContent='♡';react.onclick=e=>openReactionMenu(e.currentTarget,msg.id);actions.append(react);if(msg.sender===myRole){const del=document.createElement('button');del.type='button';del.title='Delete';del.textContent='⌫';del.onclick=()=>{if(confirm('Delete this message? It will disappear from the chat.'))socket?.emit('delete-message',msg.id);};actions.append(del);}}
+  const reactionBar=document.createElement('div');reactionBar.className='reactions';wrap.append(actions,bubble,reactionBar,meta);row.append(avatar,wrap);$('messages').append(row);updateReactions(msg.id,msg.reactions||[]);
+  if(msg.sender!==myRole&&!msg.deletedAt)attachLongPress(bubble,msg.id);
+}
+function attachLongPress(target,messageId){
+  let timer=null,moved=false,startX=0,startY=0;
+  target.addEventListener('pointerdown',e=>{if(e.button!==undefined&&e.button!==0)return;moved=false;startX=e.clientX;startY=e.clientY;timer=setTimeout(()=>{if(!moved){navigator.vibrate?.(20);openReactionMenu(target,messageId,true);}},430);});
+  target.addEventListener('pointermove',e=>{if(Math.abs(e.clientX-startX)>8||Math.abs(e.clientY-startY)>8){moved=true;clearTimeout(timer);}});
+  ['pointerup','pointercancel','pointerleave'].forEach(name=>target.addEventListener(name,()=>clearTimeout(timer)));
+  target.addEventListener('contextmenu',e=>{e.preventDefault();openReactionMenu(target,messageId,true);});
+}
+function markSeen(id,seenAt){const r=document.querySelector(`[data-receipt-for="${id}"]`);if(r){r.textContent='✓✓ seen';r.classList.add('seen');}}
+function markDeleted(id){document.querySelector(`.messageRow[data-id="${id}"]`)?.remove();}
+function updateReactions(id,reactions){const bar=document.querySelector(`.messageRow[data-id="${id}"] .reactions`);if(!bar)return;bar.innerHTML='';const groups=new Map();reactions.forEach(r=>groups.set(r.emoji,(groups.get(r.emoji)||0)+1));groups.forEach((count,emoji)=>{const b=document.createElement('button');b.type='button';b.textContent=`${emoji}${count>1?' '+count:''}`;b.onclick=()=>socket?.emit('react',{messageId:id,emoji});bar.append(b);});}
+function openReactionMenu(target,messageId,longPress=false){
+  document.querySelector('.reactionMenu')?.remove();const menu=document.createElement('div');menu.className=`reactionMenu${longPress?' reactionMenuLong':''}`;
+  const head=document.createElement('div');head.className='reactionHead';head.innerHTML='<strong>Message</strong><span><button type="button" class="replyMenuBtn">Reply</button><button type="button" class="closeReactionBtn">×</button></span>';head.querySelector('.replyMenuBtn').onclick=()=>{const row=document.querySelector(`.messageRow[data-id="${messageId}"]`);const cached=row?{id:Number(messageId),sender:row.dataset.sender,type:row.dataset.type||'text',body:row.dataset.body||'',mediaUrl:row.dataset.mediaUrl||null}:null;if(cached)startReply(cached);menu.remove();};head.querySelector('.closeReactionBtn').onclick=()=>menu.remove();const ownRow=document.querySelector(`.messageRow[data-id="${messageId}"]`);if(ownRow?.dataset.sender===myRole){const del=document.createElement('button');del.type='button';del.className='reactionDeleteBtn';del.textContent='Delete';del.onclick=()=>{if(confirm('Delete this message? It will disappear from the chat.'))socket?.emit('delete-message',Number(messageId));menu.remove();};head.querySelector('span').prepend(del);}menu.append(head);
+  const grid=document.createElement('div');grid.className='reactionGrid';reactionChoices.forEach(emoji=>{const b=document.createElement('button');b.type='button';b.textContent=emoji;b.onclick=e=>{e.stopPropagation();socket?.emit('react',{messageId,emoji});reactionBurst(emoji);menu.remove();};grid.append(b);});menu.append(grid);
+  document.body.append(menu);const rect=target.getBoundingClientRect();const width=Math.min(390,window.innerWidth-20);menu.style.width=`${width}px`;menu.style.left=`${Math.max(10,Math.min(window.innerWidth-width-10,rect.left+rect.width/2-width/2))}px`;menu.style.top=`${Math.max(10,Math.min(window.innerHeight-330,rect.top-90))}px`;
+  setTimeout(()=>document.addEventListener('pointerdown',e=>{if(!menu.contains(e.target))menu.remove();},{once:true}),0);
+}
+function reactionBurst(emoji){const layer=document.createElement('div');layer.className='reactionBurst';for(let i=0;i<18;i++){const s=document.createElement('span');s.textContent=emoji;s.style.setProperty('--x',`${(Math.random()*120-60).toFixed(1)}vw`);s.style.setProperty('--r',`${Math.random()*360-180}deg`);s.style.setProperty('--d',`${Math.random()*.35}s`);s.style.left=`${30+Math.random()*40}%`;layer.append(s);}document.body.append(layer);setTimeout(()=>layer.remove(),1500);}
+
+function appendLinkPreview(bubble,body=''){
+  const match=body.match(/https?:\/\/[^\s]+/i); if(!match)return;
+  let u;try{u=new URL(match[0]);}catch{return;}
+  const host=u.hostname.replace(/^www\./,'');
+  if(host==='youtu.be'||host.endsWith('youtube.com')){
+    let id=host==='youtu.be'?u.pathname.slice(1):u.searchParams.get('v');
+    if(!id&&u.pathname.startsWith('/shorts/'))id=u.pathname.split('/')[2];
+    if(id){
+      const wrap=document.createElement('div');wrap.className='youtubeEmbed';
+      wrap.innerHTML=`<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}" title="YouTube video" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe><a href="${u.href}" target="_blank" rel="noopener">▶ Open on YouTube</a>`;
+      bubble.append(wrap);
+    }
+  } else if(host.endsWith('pinterest.com')||host==='pin.it'){
+    const card=document.createElement('a');card.className='linkCard pinterestCard';card.href=u.href;card.target='_blank';card.rel='noopener';card.innerHTML='<span class="linkBadge">P PINTEREST</span><strong>Pinterest Pin</strong><small>Open the Pin in Pinterest</small>';bubble.append(card);
+  }
+}
+
+function scrollBottom(){$('messages').scrollTop=$('messages').scrollHeight;}
+function syncVisualViewport(){
+  const vv=window.visualViewport;const h=vv?.height||window.innerHeight;document.documentElement.style.setProperty('--visual-height',`${h}px`);
+  const keyboardLikely=Boolean(vv&&isTabletLandscape()&&document.activeElement===$('input')&&h<window.innerHeight*.82);
+  document.body.classList.toggle('ipadKeyboardOpen',keyboardLikely);
+  if(keyboardLikely)setTimeout(scrollBottom,20);
+}
+window.visualViewport?.addEventListener('resize',syncVisualViewport);window.visualViewport?.addEventListener('scroll',syncVisualViewport);window.addEventListener('resize',syncVisualViewport);syncVisualViewport();
+$('linkBtn').onclick=()=>{$('linkTray').classList.toggle('hidden');if(!$('linkTray').classList.contains('hidden'))$('linkInput').focus();};
+$('closeLinkTray').onclick=()=>{$('linkTray').classList.add('hidden');$('linkInput').value='';};
+$('sendLinkBtn').onclick=()=>{const value=$('linkInput').value.trim();if(!value||!socket?.connected)return;try{const u=new URL(value);const h=u.hostname.replace(/^www\./,'');if(!(h==='youtu.be'||h.endsWith('youtube.com')||h==='pin.it'||h.endsWith('pinterest.com')))return alert('Paste a YouTube or Pinterest link.');}catch{return alert('That link does not look valid.');}socket.emit('message',{body:value,replyToId:replyTarget?.id||null});cancelReply();$('linkInput').value='';$('linkTray').classList.add('hidden');};
+
+$('cancelReply')?.addEventListener('click',cancelReply);
+$('form').addEventListener('submit',e=>{e.preventDefault();const value=$('input').value.trim();if(!value||!socket?.connected)return;setTyping(false);socket.emit('message',{body:value,replyToId:replyTarget?.id||null});cancelReply();$('input').value='';$('input').style.height='auto';setEmojiTray(false);});
+$('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('form').requestSubmit();}});
+$('input').addEventListener('input',e=>{e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,96)+'px';setTyping(Boolean(e.target.value.trim()));});$('input').addEventListener('focus',()=>{document.body.classList.toggle('ipadComposerSide',isTabletLandscape());setTimeout(syncVisualViewport,80);});$('input').addEventListener('blur',()=>{setTyping(false);document.body.classList.remove('ipadKeyboardOpen','ipadComposerSide');});
+$('imageBtn').onclick=()=>$('imageInput').click();$('imageInput').onchange=async()=>{const file=$('imageInput').files[0];if(file)await uploadMedia('image',file);$('imageInput').value='';};
+let cameraActivityOpen=false;
+$('cameraBtn').onclick=async()=>{cameraActivityOpen=true;await setCurrentChatActivity('taking-photo');$('cameraInput').click();};
+$('cameraInput').onchange=async()=>{try{const file=$('cameraInput').files[0];if(file)await uploadMedia('image',file);}finally{$('cameraInput').value='';cameraActivityOpen=false;await setCurrentChatActivity('active');}};
+window.addEventListener('focus',()=>{if(!cameraActivityOpen)return;setTimeout(()=>{if(cameraActivityOpen){cameraActivityOpen=false;setCurrentChatActivity('active');}},600);});
+async function uploadMedia(kind,blob){const headers={'x-chat-token':authToken,'content-type':blob.type||'application/octet-stream'};if(replyTarget?.id)headers['x-reply-to']=String(replyTarget.id);const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/upload/${kind}`,{method:'POST',headers,body:blob});const data=await r.json().catch(()=>({}));if(!r.ok)alert(data.error||'Upload failed.');else cancelReply();return data;}
+$('voiceBtn').onclick=async()=>{if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)return alert('Voice recording is not supported in this browser.');try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});recordedChunks=[];const preferred=['audio/webm;codecs=opus','audio/mp4'].find(t=>MediaRecorder.isTypeSupported(t));recorder=new MediaRecorder(stream,preferred?{mimeType:preferred}:undefined);recorder.ondataavailable=e=>{if(e.data.size)recordedChunks.push(e.data);};recorder.onstop=()=>stream.getTracks().forEach(t=>t.stop());recorder.start();await setCurrentChatActivity('recording-audio');recordStarted=Date.now();$('recordTime').textContent='Recording 0:00';$('recordingBar').classList.remove('hidden');$('form').classList.add('recording');recordTimer=setInterval(()=>{const s=Math.floor((Date.now()-recordStarted)/1000);$('recordTime').textContent=`Recording ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;},250);}catch{setCurrentChatActivity('active');alert('Microphone permission is needed for voice notes.');}};
+function stopRecording(){if(recorder&&recorder.state!=='inactive')recorder.stop();clearInterval(recordTimer);$('recordingBar').classList.add('hidden');$('form').classList.remove('recording');setCurrentChatActivity('active');}
+$('cancelRecord').onclick=()=>{stopRecording();recordedChunks=[];};$('sendRecord').onclick=async()=>{if(!recorder)return;const type=recorder.mimeType||'audio/webm';stopRecording();await new Promise(r=>setTimeout(r,80));const blob=new Blob(recordedChunks,{type});recordedChunks=[];if(blob.size)await uploadMedia('audio',blob);};
+
+async function uploadAvatarFrom(inputId){const file=$(inputId).files[0];if(!file)return null;const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/upload/avatar`,{method:'POST',headers:{'x-chat-token':authToken,'content-type':file.type},body:file});const data=await r.json();if(!r.ok){alert(data.error||'Could not upload photo.');return null;}profiles[myRole]=data;refreshHeader();$(inputId).value='';return data;}
+function openProfileDialog(){
+  if(currentRoom&&myRole)refreshHeader();
+  applyAppearance();
+  const identity=getIdentity()||{},mine=(currentRoom&&myRole?profiles[myRole]:{})||{};
+  if($('profileDisplayName'))$('profileDisplayName').value=identity.name||mine.displayName||'';
+  if($('profileUsername'))$('profileUsername').value=identity.username||mine.username||'';
+  if($('profileDevicePin'))$('profileDevicePin').value=localStorage.getItem(profileDevicePinKey)||'';
+  if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='';
+  if($('deletePeopleStatus'))$('deletePeopleStatus').textContent='';
+  $('profileDialog').showModal();
+}
+$('profileBtn').onclick=openProfileDialog;
+$('homeEditProfileBtn')?.addEventListener('click',openProfileDialog);
+$('avatarPick').onclick=()=>$('avatarInput').click();$('avatarInput').onchange=()=>uploadAvatarFrom('avatarInput');
+async function saveDevicePinAcrossChats(pin){
+  if(!/^\d{4}$/.test(pin))throw new Error('Device PIN must be 4 digits.');
+  localStorage.setItem(profileDevicePinKey,pin);
+  const rooms=getRooms();let saved=0,failed=0;
+  await Promise.allSettled(rooms.map(async roomId=>{
+    const token=localStorage.getItem(storageKey(roomId));if(!token)return;
+    try{const r=await fetch(`/api/rooms/${encodeURIComponent(roomId)}/device-pin`,{method:'POST',headers:{'content-type':'application/json','x-chat-token':token},body:JSON.stringify({pin})});if(r.ok)saved++;else failed++;}catch{failed++;}
+  }));
+  return {saved,failed};
+}
+
+async function saveIdentityAcrossChats(name,username){
+  localStorage.setItem(identityKey,JSON.stringify({name,username}));
+  if(localStorage.getItem(peopleTokenKey)){try{await fetch('/api/people/register',{method:'POST',headers:{'content-type':'application/json',...peopleHeaders()},body:JSON.stringify({displayName:name,username})});}catch{}}
+  const rooms=getRooms();
+  await Promise.allSettled(rooms.map(async id=>{
+    const token=localStorage.getItem(storageKey(id));if(!token)return;
+    await fetch(`/api/rooms/${encodeURIComponent(id)}/profile`,{method:'PATCH',headers:{'content-type':'application/json','x-chat-token':token},body:JSON.stringify({displayName:name,username})});
+  }));
+  if(currentRoom&&myRole){profiles[myRole]={...(profiles[myRole]||{}),displayName:name,username};refreshHeader();}
+}
+$('saveProfile').onclick=async()=>{
+  const name=$('profileDisplayName')?.value.trim().slice(0,24)||'';
+  const username=$('profileUsername')?.value.trim().replace(/^@+/,'').replace(/[^a-zA-Z0-9_.]/g,'').slice(0,20)||'';
+  const rawPin=String($('profileDevicePin')?.value||'').replace(/\D/g,'').slice(0,4);
+  if(!name||!username){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='Add both a name and username.';return;}
+  if(rawPin&&rawPin.length!==4){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent='Device PIN must be exactly 4 digits.';return;}
+  const btn=$('saveProfile');btn.disabled=true;btn.textContent='Saving…';
+  try{
+    await saveIdentityAcrossChats(name,username);
+    let pinResult=null;if(rawPin)pinResult=await saveDevicePinAcrossChats(rawPin);
+    const bits=['Profile saved ✓'];
+    if(rawPin){if(pinResult?.saved)bits.push(`PIN saved to ${pinResult.saved} chat${pinResult.saved===1?'':'s'}`);else bits.push('PIN saved for future chats');if(pinResult?.failed)bits.push(`${pinResult.failed} chat${pinResult.failed===1?'':'s'} could not update`);}
+    if($('profileIdentityStatus'))$('profileIdentityStatus').textContent=bits.join(' · ');
+    setTimeout(()=>$('profileDialog').close(),650);
+  }catch(err){if($('profileIdentityStatus'))$('profileIdentityStatus').textContent=err?.message||'Could not save profile.';}finally{btn.disabled=false;btn.textContent='Save';}
+};
+async function applySavedProfilePinToCurrentChat(){
+  const pin=localStorage.getItem(profileDevicePinKey);if(!pin||!/^\d{4}$/.test(pin)||!currentRoom||!authToken)return;
+  try{await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/device-pin`,{method:'POST',headers:{'content-type':'application/json','x-chat-token':authToken},body:JSON.stringify({pin})});}catch{}
+}
+async function syncIdentityToRoom(){
+  const identity=getIdentity();if(!identity||!currentRoom||!authToken)return true;
+  const mine=profiles[myRole]||{};if(mine.displayName===identity.name&&mine.username===identity.username)return true;
+  const r=await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/profile`,{method:'PATCH',headers:{'content-type':'application/json','x-chat-token':authToken},body:JSON.stringify({displayName:identity.name,username:identity.username})});const data=await r.json().catch(()=>({}));if(!r.ok)return false;profiles[myRole]=data;return true;
+}
+$('setupAvatarPick').onclick=()=>$('setupAvatarInput').click();$('setupAvatarInput').onchange=()=>uploadAvatarFrom('setupAvatarInput');
+$('finishSetup').onclick=()=>{localStorage.setItem(setupKey(currentRoom,myRole),'done');$('setupDialog').close();};
+$('skipSetup').onclick=()=>{localStorage.setItem(setupKey(currentRoom,myRole),'done');$('setupDialog').close();};
+
+$('saveIdentity').onclick=async()=>{
+  const name=$('identityName').value.trim().slice(0,24);const username=$('identityUsername').value.trim().replace(/^@+/,'').replace(/[^a-zA-Z0-9_.]/g,'').slice(0,20);
+  if(!name||!username){$('identityError').textContent='Add both a name and username.';return;}
+  localStorage.setItem(identityKey,JSON.stringify({name,username}));$('identityDialog').close();if(currentRoom&&authToken){await syncIdentityToRoom();refreshHeader();}
+};
+
+async function deletePeopleAccount(){
+  const status=$('deletePeopleStatus'),token=localStorage.getItem(peopleTokenKey);
+  if(!token){if(status)status.textContent='No People account is connected on this device.';return;}
+  if(!confirm('Delete your People account? Your chats and messages will stay, but friend requests and friendships will be removed.'))return;
+  if(status)status.textContent='Deleting People account…';
+  try{const r=await fetch('/api/people/me',{method:'DELETE',headers:{'x-people-token':token}}),d=await r.json().catch(()=>({}));if(!r.ok){if(status)status.textContent=d.error||'Could not delete People account.';return;}localStorage.removeItem(peopleTokenKey);if(status)status.textContent='People account deleted ✓';}catch{if(status)status.textContent='Could not delete People account.';}
+}
+$('deletePeopleAccountBtn')?.addEventListener('click',deletePeopleAccount);
 
 function peopleHeaders(){const t=localStorage.getItem(peopleTokenKey);return t?{'x-people-token':t}:{};}
 async function ensurePeopleAccount(){
   const identity=getIdentity(),status=$('peopleStatus');
-  const pin=localStorage.getItem(profileDevicePinKey)||'';if(!identity?.name||!identity?.username||!/^\d{4}$/.test(pin)){if(status)status.textContent='Set your name, username + 4-digit PIN in Edit profile first.';return false;}
-  const r=await fetch('/api/people/register',{method:'POST',headers:{'content-type':'application/json',...peopleHeaders()},body:JSON.stringify({displayName:identity.name,username:identity.username,pin:localStorage.getItem(profileDevicePinKey)||''})});
+  if(!identity?.name||!identity?.username){if(status)status.textContent='Set your Name + Username in Profile first.';return false;}
+  const r=await fetch('/api/people/register',{method:'POST',headers:{'content-type':'application/json',...peopleHeaders()},body:JSON.stringify({displayName:identity.name,username:identity.username})});
   const d=await r.json().catch(()=>({}));
   if(!r.ok){if(status)status.textContent=d.error||'Could not set up People.';return false;}
   if(d.peopleToken)localStorage.setItem(peopleTokenKey,d.peopleToken);
@@ -837,8 +1195,27 @@ document.addEventListener('visibilitychange',()=>{
   socket.emit(document.hidden?'presence-away':'presence-back');
 });
 window.addEventListener('pagehide',()=>{if(socket?.connected)socket.emit('presence-away');});
-window.addEventListener('pageshow',()=>{if(socket?.connected)socket.emit('presence-back');});async function linkCurrentRoomToAccount(){
-  const peopleToken=localStorage.getItem(peopleTokenKey);if(!peopleToken||!currentRoom||!authToken)return;
-  try{await fetch('/api/people/link-room',{method:'POST',headers:{'content-type':'application/json','x-people-token':peopleToken,'x-chat-token':authToken},body:JSON.stringify({roomId:currentRoom})});}catch{}
-}
+window.addEventListener('pageshow',()=>{if(socket?.connected)socket.emit('presence-back');});
 
+
+// v38 stability + account UI
+function v38OpenProfile(){
+  const identity=getIdentity()||{};
+  if($('profileDisplayName'))$('profileDisplayName').value=identity.name||'';
+  if($('profileUsername'))$('profileUsername').value=identity.username||'';
+  if($('profileDevicePin'))$('profileDevicePin').value=localStorage.getItem(profileDevicePinKey)||'';
+  if(currentRoom&&myRole)setAvatar($('profileAvatar'),myRole); else {const av=localStorage.getItem('bloop:accountAvatar:v1');if(av&&$('profileAvatar'))$('profileAvatar').src=av;}
+  $('profileDialog')?.showModal();
+}
+$('homeEditProfileBtn')?.addEventListener('click',v38OpenProfile);
+// Original chat profile handler remains; this makes it explicit and reliable too.
+$('profileBtn')?.addEventListener('click',v38OpenProfile);
+function v38SkipIdentity(){localStorage.setItem(identitySkippedKey,'1');$('identityDialog')?.close();}
+$('identityCloseBtn')?.addEventListener('click',v38SkipIdentity);$('identityLaterBtn')?.addEventListener('click',v38SkipIdentity);
+
+async function v38AccountSignIn(){
+ const name=$('accountSignInName')?.value.trim()||'',username=$('accountSignInUsername')?.value.trim().replace(/^@+/,'')||'',pin=String($('accountSignInPin')?.value||'').replace(/\D/g,'').slice(0,4),status=$('accountSignInStatus');
+ if(!name||username.length<3||pin.length!==4){if(status)status.textContent='Enter your name, username and 4-digit PIN.';return;}
+ try{const res=await fetch('/api/people/sign-in',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({displayName:name,username,pin})});const data=await res.json().catch(()=>({}));if(!res.ok){if(status)status.textContent=data.error||'Could not sign in.';return;}localStorage.setItem(peopleTokenKey,data.peopleToken);localStorage.setItem(identityKey,JSON.stringify({name:data.profile.displayName,username:data.profile.username}));localStorage.setItem(profileDevicePinKey,pin);const rooms=getRooms();for(const chat of data.chats||[]){localStorage.setItem(storageKey(chat.roomId),chat.authToken);localStorage.setItem(roleKey(chat.roomId),chat.role);if(!rooms.includes(chat.roomId))rooms.unshift(chat.roomId);}localStorage.setItem(roomsKey,JSON.stringify(rooms.slice(0,30)));if(status)status.textContent=`Signed in ✓ ${data.chats?.length||0} saved chat${data.chats?.length===1?'':'s'} loaded.`;await setupContacts({notify:false});}catch{if(status)status.textContent='Could not connect. Try again.';}
+}
+$('accountSignInPin')?.addEventListener('input',e=>e.target.value=String(e.target.value||'').replace(/\D/g,'').slice(0,4));$('accountSignInBtn')?.addEventListener('click',v38AccountSignIn);
